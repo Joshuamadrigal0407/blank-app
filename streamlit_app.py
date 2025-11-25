@@ -1,120 +1,128 @@
-import requests
-import csv
+import streamlit as st
+import pandas as pd
+import re
+import urllib.request
+import urllib.error
 import time
 
-# ======================================================
-#                 CONFIGURATION
-# ======================================================
+st.set_page_config(page_title="Commercial Property Lead Scraper", layout="wide")
 
-# 👉 Put your property data provider API key here
-API_KEY = "YOUR_API_KEY_HERE"
+# -----------------------------
+# Utility functions
+# -----------------------------
 
-# 👉 Put your property provider base URL here
-# (Example placeholder. Replace with real one from Reonomy / PropStream / PropertyRadar, etc.)
-PROPERTY_API_URL = "https://api.yourprovider.com/v1/search"
+def normalize_url(url):
+    """Ensure URL has http/https."""
+    if not isinstance(url, str):
+        return ""
+    url = url.strip()
+    if not url:
+        return ""
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    return url
 
-# 👉 Maximum number of properties to pull
-MAX_RESULTS = 100
 
-# 👉 Output file
-OUTPUT_FILE = "commercial_properties_ca.csv"
-
-
-# ======================================================
-#                 FUNCTIONS
-# ======================================================
-
-def query_properties(city: str, state: str = "CA") -> list:
-    """
-    Queries a legitimate property data provider for commercial/industrial properties.
-    You MUST replace fields based on your provider's API documentation.
-    """
-
-    params = {
-        "city": city,
-        "state": state,
-        "property_type": "commercial,industrial",  # Many APIs accept comma-separated types
-        "api_key": API_KEY,
-        "limit": MAX_RESULTS
-    }
-
-    try:
-        response = requests.get(PROPERTY_API_URL, params=params, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-
-        return data.get("results", [])
-
-    except Exception as e:
-        print(f"[ERROR] Could not query API: {e}")
+def find_emails_on_url(url, max_bytes=200000):
+    """Scrape a website and extract visible email addresses."""
+    emails = set()
+    url = normalize_url(url)
+    if not url:
         return []
 
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            content_bytes = resp.read(max_bytes)
 
-def extract_fields(record: dict) -> dict:
-    """
-    Extracts useful fields from the API response.
-    You MUST adapt key names based on your provider's documentation.
-    """
-    owner = record.get("owner", {})
-    contact = record.get("contact", {})
-    prop = record.get("property", {})
+        try:
+            text = content_bytes.decode("utf-8", errors="ignore")
+        except Exception:
+            text = content_bytes.decode("latin-1", errors="ignore")
 
-    return {
-        "property_address": prop.get("address"),
-        "property_city": prop.get("city"),
-        "property_state": prop.get("state"),
-        "property_zip": prop.get("zip"),
-        "owner_name": owner.get("name"),
-        "owner_mailing_address": owner.get("mailing_address"),
-        "owner_email": contact.get("email"),
-        "owner_phone": contact.get("phone")
-    }
+    except Exception as e:
+        st.write(f"❌ Could not fetch {url} ({e})")
+        return []
 
+    # Regex for emails
+    possible = re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
+    for e in possible:
+        if not e.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".svg")):
+            emails.add(e)
 
-def save_to_csv(rows: list, filename: str):
-    if not rows:
-        print("No data to save.")
-        return
-
-    keys = rows[0].keys()
-
-    with open(filename, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=keys)
-        writer.writeheader()
-        writer.writerows(rows)
-
-    print(f"\nSaved {len(rows)} properties to {filename}")
+    return sorted(emails)
 
 
-# ======================================================
-#                    MAIN PROGRAM
-# ======================================================
+# -----------------------------
+# Streamlit UI
+# -----------------------------
 
-def main():
-    print("=== California Commercial Property Lead Generator ===")
-    print("This software pulls owner names, emails, addresses, and property info")
-    print("from a legitimate property database API.\n")
+st.title("🏭 Commercial & Industrial Property Lead Scraper")
+st.write("Upload a CSV of properties and I will extract public emails from the websites.")
+st.write("No API keys required. 100% plug-and-play.")
 
-    city = input("Enter a California city (example: Fresno): ").strip()
+sample_csv = """
+name,address,website
+ABC Industrial,123 Main St Fresno CA,https://example.com
+XYZ Warehouse,456 Commerce Bakersfield CA,https://warehouse.com
+"""
 
-    print(f"\nSearching commercial + industrial properties in {city}, CA...\n")
+st.subheader("📥 Step 1: Upload Your CSV")
+uploaded = st.file_uploader("Upload a CSV with columns: name, address, website", type=["csv"])
 
-    results = query_properties(city)
-    extracted = []
+st.write("Example CSV format:")
+st.code(sample_csv, language="csv")
 
-    for idx, r in enumerate(results, start=1):
-        row = extract_fields(r)
-        extracted.append(row)
+if uploaded:
+    df = pd.read_csv(uploaded)
+    
+    # Make sure required columns exist
+    required_cols = {"name", "address", "website"}
+    if not required_cols.issubset(df.columns.str.lower()):
+        st.error("CSV must contain columns: name, address, website")
+    else:
+        st.success("CSV uploaded successfully!")
 
-        print(f"[{idx}/{len(results)}] {row.get('property_address')} "
-              f"- Owner: {row.get('owner_name')} "
-              f"- Email: {row.get('owner_email')}")
+        if st.button("🔍 Scrape Emails Now"):
 
-        time.sleep(0.5)
+            st.subheader("🔎 Scanning Websites for Emails...")
+            results = []
 
-    save_to_csv(extracted, OUTPUT_FILE)
+            progress = st.progress(0)
+            total = len(df)
 
+            for idx, row in df.iterrows():
+                name = row.get("name")
+                address = row.get("address")
+                website = row.get("website")
 
-if __name__ == "__main__":
-    main()
+                st.write(f"**[{idx+1}/{total}] Checking:** {name} — {website}")
+
+                emails = find_emails_on_url(website)
+                email_str = ", ".join(emails)
+
+                results.append({
+                    "name": name,
+                    "address": address,
+                    "website": website,
+                    "emails_found": email_str
+                })
+
+                progress.progress((idx+1) / total)
+                time.sleep(0.5)
+
+            st.success("Done! Emails extracted.")
+
+            result_df = pd.DataFrame(results)
+
+            st.subheader("📄 Results")
+            st.dataframe(result_df, use_container_width=True)
+
+            # Download button
+            st.download_button(
+                label="📥 Download Results as CSV",
+                data=result_df.to_csv(index=False),
+                file_name="leads_with_emails.csv",
+                mime="text/csv"
+            )
 
