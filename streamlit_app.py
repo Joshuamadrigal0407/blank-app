@@ -63,8 +63,10 @@ class LeadFinder:
 
             for result in data.get("results", []):
                 businesses.append(
-                    {
-                        "business_name": result.get("name"),
+                    {File "/mount/src/blank-app/streamlit_app.py", line 66
+                      {
+                      ^
+SyntaxError: '{' was never closed                        "business_name": result.get("name"),
                         "formatted_address": result.get("formatted_address"),
                         "place_id": result.get("place_id"),
 
