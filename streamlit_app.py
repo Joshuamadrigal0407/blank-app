@@ -148,22 +148,86 @@ class LeadFinder:
     # ---------------------------
     # 4) OWNER LOOKUP (STUB)
     # ---------------------------
-    def lookup_owner_for_address(self, full_address: str) -> Dict[str, Optional[str]]:
+       def lookup_owner_for_address(self, full_address: str) -> Dict[str, Optional[str]]:
         """
-        STUB: This is where you would integrate a property data provider.
+        Looks up the property owner using a 3rd-party property data API.
 
-        For example, using an API from:
-          - PropertyRadar
-          - Reonomy
-          - PropStream
-          - County/assessor API (if available)
-
-        Right now it returns empty values.
+        You MUST customize:
+          - PROPERTY_API_BASE_URL
+          - query params / JSON parsing
+        based on your provider's API documentation.
         """
-        return {
-            "owner_name": None,
-            "owner_mailing_address": None,
-        }
+        from urllib.parse import urlencode
+
+        if not full_address:
+            return {
+                "owner_name": None,
+                "owner_mailing_address": None,
+            }
+
+        # Make sure you set PROPERTY_API_KEY and PROPERTY_API_BASE_URL at the top.
+        if not PROPERTY_API_KEY or PROPERTY_API_KEY == "YOUR_PROPERTY_API_KEY_HERE":
+            # If you haven't set it yet, just skip owner lookup
+            return {
+                "owner_name": None,
+                "owner_mailing_address": None,
+            }
+
+        try:
+            # ⚠️ THIS IS A TEMPLATE – you MUST adjust the parameters
+            # to match your provider's docs.
+            #
+            # Common patterns:
+            #   - GET /v1/property?address=123+Main+St,+San+Jose,+CA
+            #   - Or POST with JSON body
+            query_params = {
+                "address": full_address,
+                "api_key": PROPERTY_API_KEY,  # or use headers if required
+            }
+            url = f"{PROPERTY_API_BASE_URL}?{urlencode(query_params)}"
+
+            resp = requests.get(url, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+
+            # ⚠️ Adjust this based on the provider's JSON response.
+            # Example of a typical structure:
+            # {
+            #   "results": [
+            #       {
+            #           "owner": {
+            #               "name": "ABC Investments LLC",
+            #               "mailing_address": "PO Box 123, San Jose, CA 95112"
+            #           }
+            #       }
+            #   ]
+            # }
+            results = data.get("results", [])
+            if not results:
+                return {
+                    "owner_name": None,
+                    "owner_mailing_address": None,
+                }
+
+            first = results[0]
+            owner_info = first.get("owner", {})
+
+            owner_name = owner_info.get("name")
+            owner_mailing_address = owner_info.get("mailing_address")
+
+            return {
+                "owner_name": owner_name,
+                "owner_mailing_address": owner_mailing_address,
+            }
+
+        except Exception as e:
+            # If anything goes wrong, just return empty fields so the rest of
+            # the script still works.
+            print(f"Owner lookup failed for address '{full_address}': {e}")
+            return {
+                "owner_name": None,
+                "owner_mailing_address": None,
+            }
 
 
 def build_commercial_keywords() -> List[str]:
