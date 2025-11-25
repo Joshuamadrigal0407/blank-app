@@ -7,11 +7,18 @@ from typing import List, Dict, Optional, Set
 import requests
 
 # ======================
-# CONFIG – EDIT THIS
+# CONFIG – EDIT THESE
 # ======================
 
 # 👉 Replace this with your real Google Places API key
 GOOGLE_API_KEY = "YOUR_GOOGLE_PLACES_API_KEY_HERE"
+
+# 👉 Replace this with your real property data API key
+PROPERTY_API_KEY = "YOUR_PROPERTY_API_KEY_HERE"
+
+# 👉 Replace this with the base URL from your property data provider docs
+# Example placeholder: "https://api.yourprovider.com/v1/property"
+PROPERTY_API_BASE_URL = "https://api.yourprovider.com/v1/property"
 
 # How long to wait between Google API calls (seconds)
 REQUEST_DELAY_SECONDS = 1.0
@@ -23,7 +30,7 @@ class LeadFinder:
       1) Searches businesses via Google Places
       2) Looks up details (address, website, phone)
       3) Scrapes public emails from the website (if any)
-      4) Has a stub for owner lookup you can plug into a property data provider
+      4) Looks up owner info via a property data provider (template)
     """
 
     def __init__(self, google_api_key: str, delay_between_requests: float = 1.0):
@@ -36,7 +43,7 @@ class LeadFinder:
         self.delay = delay_between_requests
 
     # ---------------------------
-    # 1) SEARCH BUSINESSES
+       # 1) SEARCH BUSINESSES
     # ---------------------------
     def search_businesses(
         self,
@@ -146,9 +153,9 @@ class LeadFinder:
         return sorted(filtered)
 
     # ---------------------------
-    # 4) OWNER LOOKUP (STUB)
+    # 4) OWNER LOOKUP (TEMPLATE)
     # ---------------------------
-       def lookup_owner_for_address(self, full_address: str) -> Dict[str, Optional[str]]:
+    def lookup_owner_for_address(self, full_address: str) -> Dict[str, Optional[str]]:
         """
         Looks up the property owner using a 3rd-party property data API.
 
@@ -165,24 +172,26 @@ class LeadFinder:
                 "owner_mailing_address": None,
             }
 
-        # Make sure you set PROPERTY_API_KEY and PROPERTY_API_BASE_URL at the top.
-        if not PROPERTY_API_KEY or PROPERTY_API_KEY == "YOUR_PROPERTY_API_KEY_HERE":
-            # If you haven't set it yet, just skip owner lookup
+        # If you haven't configured the property API yet, skip quietly
+        if (
+            not PROPERTY_API_KEY
+            or PROPERTY_API_KEY == "YOUR_PROPERTY_API_KEY_HERE"
+            or not PROPERTY_API_BASE_URL
+            or PROPERTY_API_BASE_URL == "https://api.yourprovider.com/v1/property"
+        ):
             return {
                 "owner_name": None,
                 "owner_mailing_address": None,
             }
 
         try:
-            # ⚠️ THIS IS A TEMPLATE – you MUST adjust the parameters
-            # to match your provider's docs.
-            #
+            # ⚠️ TEMPLATE: Adjust this based on your provider's docs.
             # Common patterns:
-            #   - GET /v1/property?address=123+Main+St,+San+Jose,+CA
-            #   - Or POST with JSON body
+            #   - GET /v1/property?address=123+Main+St,+San+Jose,+CA&api_key=...
+            #   - Or POST with JSON body & Authorization header
             query_params = {
                 "address": full_address,
-                "api_key": PROPERTY_API_KEY,  # or use headers if required
+                "api_key": PROPERTY_API_KEY,  # or move this to headers if needed
             }
             url = f"{PROPERTY_API_BASE_URL}?{urlencode(query_params)}"
 
@@ -190,8 +199,9 @@ class LeadFinder:
             resp.raise_for_status()
             data = resp.json()
 
-            # ⚠️ Adjust this based on the provider's JSON response.
+            # ⚠️ TEMPLATE: Adjust parsing based on actual JSON structure.
             # Example of a typical structure:
+            #
             # {
             #   "results": [
             #       {
@@ -221,8 +231,8 @@ class LeadFinder:
             }
 
         except Exception as e:
-            # If anything goes wrong, just return empty fields so the rest of
-            # the script still works.
+            # If anything goes wrong, just return empty fields so the rest
+            # of the script continues working.
             print(f"Owner lookup failed for address '{full_address}': {e}")
             return {
                 "owner_name": None,
@@ -273,7 +283,7 @@ def dedupe_by_place_id(business_lists: List[List[Dict]]) -> List[Dict]:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Find commercial business leads with address, optional owner info, and public emails."
+        description="Find commercial business leads with address, owner info template, and public emails."
     )
     parser.add_argument("--city", required=True, help="City to search, e.g. 'San Jose'")
     parser.add_argument(
@@ -360,7 +370,7 @@ def main():
         emails = lf.find_emails_on_website(website)
         email_list_str = ", ".join(emails) if emails else ""
 
-        # Owner lookup (currently stubbed)
+        # Owner lookup (using your provider template)
         owner = lf.lookup_owner_for_address(address or "")
 
         row = {
@@ -402,4 +412,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
