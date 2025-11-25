@@ -2,15 +2,12 @@ import csv
 import re
 import urllib.request
 import urllib.error
-import os
 import time
-from typing import List
 
-INPUT_FILE = "businesses.csv"
-OUTPUT_FILE = "businesses_with_emails.csv"
+OUTPUT_FILE = "leads_with_emails.csv"
 
 
-def normalize_url(url: str) -> str:
+def normalize_url(url):
     url = url.strip()
     if not url:
         return ""
@@ -19,7 +16,8 @@ def normalize_url(url: str) -> str:
     return url
 
 
-def find_emails_on_url(url: str, max_bytes: int = 200_000) -> List[str]:
+def find_emails_on_url(url, max_bytes=200000):
+    emails = set()
     url = normalize_url(url)
     if not url:
         return []
@@ -33,77 +31,81 @@ def find_emails_on_url(url: str, max_bytes: int = 200_000) -> List[str]:
         except Exception:
             text = content_bytes.decode("latin-1", errors="ignore")
     except Exception as e:
-        print(f"  ! Could not fetch {url} ({e})")
+        print("  ! Could not fetch {} ({})".format(url, e))
         return []
 
     # Simple regex for emails
-    possible_emails = set(
-        re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
-    )
+    for e in re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text):
+        e_low = e.lower()
+        # Filter out obvious junk (image filenames etc.)
+        if not e_low.endswith((".png", ".jpg", ".jpeg", ".gif", ".svg")):
+            emails.add(e)
 
-    # Filter out obvious junk (image filenames etc.)
-    filtered = {
-        e
-        for e in possible_emails
-        if not e.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".svg"))
-    }
-
-    return sorted(filtered)
+    return sorted(emails)
 
 
 def main():
-    # If no input file yet, create a template for you to fill
-    if not os.path.exists(INPUT_FILE):
-        with open(INPUT_FILE, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["name", "address", "website"])
-            writer.writerow(["Sample Business", "123 Main St, YourCity, CA", "https://example.com"])
+    print("Lead Email Finder (no API keys, plug-and-play)")
+    print("------------------------------------------------")
+    print("You will be asked to enter business info.")
+    print("When you're done, just press ENTER on 'Business name' to finish.\n")
 
-        print(f"Created {INPUT_FILE}.")
-        print("Open it in Excel, add your businesses (name, address, website), then run this script again.")
+    leads = []
+
+    while True:
+        name = input("Business name (or press ENTER to finish): ").strip()
+        if not name:
+            break
+        address = input("Business address (optional): ").strip()
+        website = input("Website (e.g. example.com or https://example.com): ").strip()
+        print("")
+        leads.append({"name": name, "address": address, "website": website})
+
+    if not leads:
+        print("No businesses entered. Exiting.")
         return
 
-    # Read existing businesses
-    with open(INPUT_FILE, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        rows = list(reader)
+    print("\nSearching for emails on each website...\n")
 
-    if not rows:
-        print(f"No data rows found in {INPUT_FILE}. Add some businesses first.")
-        return
-
-    print(f"Found {len(rows)} businesses in {INPUT_FILE}")
     output_rows = []
-    total = len(rows)
+    total = len(leads)
 
-    for idx, row in enumerate(rows, start=1):
-        name = row.get("name", "").strip()
-        addr = row.get("address", "").strip()
-        website = row.get("website", "").strip()
+    for idx, lead in enumerate(leads, start=1):
+        name = lead["name"]
+        address = lead["address"]
+        website = lead["website"]
 
-        print(f"[{idx}/{total}] {name or '(no name)'} - {website or 'no website'}")
+        print("[{}/{}] {} - {}".format(idx, total, name or "(no name)", website or "no website"))
 
         emails = find_emails_on_url(website) if website else []
         email_str = ", ".join(emails)
 
-        out_row = dict(row)
-        out_row["emails_found"] = email_str
-        output_rows.append(out_row)
+        print("   Emails found: {}".format(email_str or "none"))
+        print("")
+
+        output_rows.append(
+            {
+                "name": name,
+                "address": address,
+                "website": website,
+                "emails_found": email_str,
+            }
+        )
 
         # Small delay to be polite to websites
         time.sleep(1)
 
-    fieldnames = list(rows[0].keys())
-    if "emails_found" not in fieldnames:
-        fieldnames.append("emails_found")
+    fieldnames = ["name", "address", "website", "emails_found"]
 
     with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(output_rows)
 
-    print(f"Done. Wrote results with emails to {OUTPUT_FILE}")
+    print("Done.")
+    print("Results saved in '{}' (you can open this in Excel).".format(OUTPUT_FILE))
 
 
 if __name__ == "__main__":
     main()
+
