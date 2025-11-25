@@ -2,23 +2,16 @@ import argparse
 import csv
 import re
 import time
-from typing import List, Dict, Optional, Set
+from typing import List, Dict, Optional
 
 import requests
 
-# ======================
-# CONFIG – EDIT THESE
-# ======================
+# ======================================
+# CONFIG – YOU MUST EDIT THIS PART
+# ======================================
 
-# 👉 Replace this with your real Google Places API key
+# 👉 Put your real Google Places API key here
 GOOGLE_API_KEY = "YOUR_GOOGLE_PLACES_API_KEY_HERE"
-
-# 👉 Replace this with your real property data API key
-PROPERTY_API_KEY = "YOUR_PROPERTY_API_KEY_HERE"
-
-# 👉 Replace this with the base URL from your property data provider docs
-# Example placeholder: "https://api.yourprovider.com/v1/property"
-PROPERTY_API_BASE_URL = "https://api.yourprovider.com/v1/property"
 
 # How long to wait between Google API calls (seconds)
 REQUEST_DELAY_SECONDS = 1.0
@@ -26,24 +19,22 @@ REQUEST_DELAY_SECONDS = 1.0
 
 class LeadFinder:
     """
-    Lead finder that:
+    Simple lead finder that:
       1) Searches businesses via Google Places
-      2) Looks up details (address, website, phone)
+      2) Gets details (name, address, website, phone)
       3) Scrapes public emails from the website (if any)
-      4) Looks up owner info via a property data provider (template)
     """
 
     def __init__(self, google_api_key: str, delay_between_requests: float = 1.0):
         if not google_api_key or google_api_key == "YOUR_GOOGLE_PLACES_API_KEY_HERE":
             raise ValueError(
-                "You must set GOOGLE_API_KEY at the top of this file "
-                "to your real Google Places API key."
+                "You must set GOOGLE_API_KEY in the script to your real Google Places API key."
             )
         self.google_api_key = google_api_key
         self.delay = delay_between_requests
 
     # ---------------------------
-       # 1) SEARCH BUSINESSES
+    # 1) SEARCH BUSINESSES
     # ---------------------------
     def search_businesses(
         self,
@@ -54,7 +45,7 @@ class LeadFinder:
     ) -> List[Dict]:
         """
         Uses Google Places Text Search to find businesses
-        like 'warehouses in San Jose, CA'.
+        like 'commercial building in San Jose, CA'.
         """
         url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
         params = {
@@ -63,6 +54,7 @@ class LeadFinder:
         }
 
         businesses: List[Dict] = []
+
         while True:
             response = requests.get(url, params=params, timeout=15)
             response.raise_for_status()
@@ -83,7 +75,7 @@ class LeadFinder:
             if not next_token:
                 break
 
-            # Google requires a small pause before using next_page_token
+            # Google requires a short pause before using next_page_token
             time.sleep(2.0)
             params = {"pagetoken": next_token, "key": self.google_api_key}
 
@@ -119,8 +111,8 @@ class LeadFinder:
     def find_emails_on_website(
         self,
         url: Optional[str],
-        max_bytes: int = 200_000
-    ) -> List[str]:
+        max_bytes: int = 200_000,
+    ) -> list[str]:
         """
         Fetches the website HTML and tries to find public email addresses.
         Only uses publicly visible content.
@@ -128,7 +120,7 @@ class LeadFinder:
         if not url:
             return []
 
-        # Basic sanity: ensure scheme
+        # Ensure it has http/https
         if not url.startswith("http://") and not url.startswith("https://"):
             url = "https://" + url
 
@@ -143,7 +135,7 @@ class LeadFinder:
             re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
         )
 
-        # Filter out some obvious junk
+        # Filter out obvious junk (image urls, etc.)
         filtered = {
             e
             for e in possible_emails
@@ -152,212 +144,47 @@ class LeadFinder:
 
         return sorted(filtered)
 
-    # ---------------------------
-    # 4) OWNER LOOKUP (TEMPLATE)
-    # ---------------------------
-    def lookup_owner_for_address(self, full_address: str) -> Dict[str, Optional[str]]:
-        """
-        Looks up the property owner using a 3rd-party property data API.
-
-        You MUST customize:
-          - PROPERTY_API_BASE_URL
-          - query params / JSON parsing
-        based on your provider's API documentation.
-        """
-        from urllib.parse import urlencode
-
-        if not full_address:
-            return {
-                "owner_name": None,
-                "owner_mailing_address": None,
-            }
-
-        # If you haven't configured the property API yet, skip quietly
-        if (
-            not PROPERTY_API_KEY
-            or PROPERTY_API_KEY == "YOUR_PROPERTY_API_KEY_HERE"
-            or not PROPERTY_API_BASE_URL
-            or PROPERTY_API_BASE_URL == "https://api.yourprovider.com/v1/property"
-        ):
-            return {
-                "owner_name": None,
-                "owner_mailing_address": None,
-            }
-
-        try:
-            # ⚠️ TEMPLATE: Adjust this based on your provider's docs.
-            # Common patterns:
-            #   - GET /v1/property?address=123+Main+St,+San+Jose,+CA&api_key=...
-            #   - Or POST with JSON body & Authorization header
-            query_params = {
-                "address": full_address,
-                "api_key": PROPERTY_API_KEY,  # or move this to headers if needed
-            }
-            url = f"{PROPERTY_API_BASE_URL}?{urlencode(query_params)}"
-
-            resp = requests.get(url, timeout=15)
-            resp.raise_for_status()
-            data = resp.json()
-
-            # ⚠️ TEMPLATE: Adjust parsing based on actual JSON structure.
-            # Example of a typical structure:
-            #
-            # {
-            #   "results": [
-            #       {
-            #           "owner": {
-            #               "name": "ABC Investments LLC",
-            #               "mailing_address": "PO Box 123, San Jose, CA 95112"
-            #           }
-            #       }
-            #   ]
-            # }
-            results = data.get("results", [])
-            if not results:
-                return {
-                    "owner_name": None,
-                    "owner_mailing_address": None,
-                }
-
-            first = results[0]
-            owner_info = first.get("owner", {})
-
-            owner_name = owner_info.get("name")
-            owner_mailing_address = owner_info.get("mailing_address")
-
-            return {
-                "owner_name": owner_name,
-                "owner_mailing_address": owner_mailing_address,
-            }
-
-        except Exception as e:
-            # If anything goes wrong, just return empty fields so the rest
-            # of the script continues working.
-            print(f"Owner lookup failed for address '{full_address}': {e}")
-            return {
-                "owner_name": None,
-                "owner_mailing_address": None,
-            }
-
-
-def build_commercial_keywords() -> List[str]:
-    """
-    Returns a list of keywords that tend to match commercial / industrial properties.
-    """
-    return [
-        "commercial building",
-        "commercial property",
-        "industrial building",
-        "industrial park",
-        "warehouse",
-        "distribution center",
-        "logistics center",
-        "manufacturing",
-        "business park",
-        "office building",
-        "shopping center",
-        "strip mall",
-    ]
-
-
-def dedupe_by_place_id(business_lists: List[List[Dict]]) -> List[Dict]:
-    """
-    Merge multiple business lists together and remove duplicates
-    based on Google place_id.
-    """
-    seen: Set[str] = set()
-    merged: List[Dict] = []
-
-    for blist in business_lists:
-        for b in blist:
-            pid = b.get("place_id")
-            if not pid:
-                continue
-            if pid in seen:
-                continue
-            seen.add(pid)
-            merged.append(b)
-
-    return merged
-
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Find commercial business leads with address, owner info template, and public emails."
+        description="Find business leads (name, address, website, phone, public emails)."
     )
-    parser.add_argument("--city", required=True, help="City to search, e.g. 'San Jose'")
-    parser.add_argument(
-        "--state",
-        default="CA",
-        help="State code, default 'CA' (California).",
-    )
+    parser.add_argument("--city", required=True, help="City name, e.g. 'San Jose'")
+    parser.add_argument("--state", default="CA", help="State code, e.g. 'CA'")
     parser.add_argument(
         "--keyword",
-        help="Custom keyword, e.g. 'winery', 'warehouse', etc. "
-             "If you pass this, only this keyword is used.",
+        default="commercial building",
+        help="Search keyword, e.g. 'commercial building', 'warehouse', 'industrial building'",
     )
     parser.add_argument(
-        "--commercial",
-        action="store_true",
-        help="If set, searches a bundle of commercial-building keywords (warehouses, industrial, offices, etc.)",
-    )
-    parser.add_argument(
-        "--max-per-keyword",
+        "--max-results",
         type=int,
         default=30,
-        help="Max number of businesses to pull from Google Places per keyword.",
+        help="Maximum number of businesses to fetch.",
     )
     parser.add_argument(
         "--output",
         default="leads.csv",
-        help="Output CSV file name (default: leads.csv).",
+        help="Output CSV filename (default: leads.csv)",
     )
 
     args = parser.parse_args()
 
-    lf = LeadFinder(
-        google_api_key=GOOGLE_API_KEY,
-        delay_between_requests=REQUEST_DELAY_SECONDS,
+    lf = LeadFinder(GOOGLE_API_KEY, REQUEST_DELAY_SECONDS)
+
+    print(f"Searching for '{args.keyword}' in {args.city}, {args.state}...")
+    businesses = lf.search_businesses(
+        city=args.city,
+        state=args.state,
+        keyword=args.keyword,
+        max_results=args.max_results,
     )
-
-    # Decide which keywords to use
-    keywords: List[str]
-    if args.keyword:
-        keywords = [args.keyword]
-        print(f"Using custom keyword: {args.keyword!r}")
-    elif args.commercial:
-        keywords = build_commercial_keywords()
-        print("Using commercial keyword bundle:")
-        for kw in keywords:
-            print(f"  - {kw}")
-    else:
-        # Default if nothing specified: generic commercial building
-        keywords = ["commercial building"]
-        print("No keyword or --commercial given. Using default keyword: 'commercial building'")
-
-    all_business_lists: List[List[Dict]] = []
-
-    # 1) SEARCH FOR EACH KEYWORD
-    for kw in keywords:
-        print(f"\nSearching for '{kw}' in {args.city}, {args.state}...")
-        businesses = lf.search_businesses(
-            city=args.city,
-            state=args.state,
-            keyword=kw,
-            max_results=args.max_per_keyword,
-        )
-        print(f"  Found {len(businesses)} results for keyword '{kw}'")
-        all_business_lists.append(businesses)
-        # Small pause between keyword batches
-        time.sleep(1.0)
-
-    # Merge & dedupe by place_id
-    merged_businesses = dedupe_by_place_id(all_business_lists)
-    print(f"\nTotal unique businesses after merging/deduping: {len(merged_businesses)}")
+    print(f"Found {len(businesses)} businesses, fetching details + emails...")
 
     rows = []
-    total = len(merged_businesses)
-    for idx, b in enumerate(merged_businesses, start=1):
+    total = len(businesses)
+
+    for idx, b in enumerate(businesses, start=1):
         place_id = b.get("place_id")
         if not place_id:
             continue
@@ -366,18 +193,12 @@ def main():
         address = details.get("formatted_address")
         website = details.get("website")
 
-        # Get public emails from website
         emails = lf.find_emails_on_website(website)
         email_list_str = ", ".join(emails) if emails else ""
-
-        # Owner lookup (using your provider template)
-        owner = lf.lookup_owner_for_address(address or "")
 
         row = {
             "business_name": details.get("business_name"),
             "property_address": address,
-            "owner_name": owner.get("owner_name"),
-            "owner_mailing_address": owner.get("owner_mailing_address"),
             "website": website,
             "phone": details.get("phone"),
             "emails_found": email_list_str,
@@ -395,8 +216,6 @@ def main():
     fieldnames = [
         "business_name",
         "property_address",
-        "owner_name",
-        "owner_mailing_address",
         "website",
         "phone",
         "emails_found",
@@ -412,3 +231,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
