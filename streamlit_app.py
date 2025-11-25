@@ -1,4 +1,3 @@
-import streamlit as st
 import requests
 import csv
 import time
