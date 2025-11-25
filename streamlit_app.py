@@ -2,7 +2,7 @@ import argparse
 import csv
 import re
 import time
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Set
 
 import requests
 
@@ -166,22 +166,72 @@ class LeadFinder:
         }
 
 
+def build_commercial_keywords() -> List[str]:
+    """
+    Returns a list of keywords that tend to match commercial / industrial properties.
+    """
+    return [
+        "commercial building",
+        "commercial property",
+        "industrial building",
+        "industrial park",
+        "warehouse",
+        "distribution center",
+        "logistics center",
+        "manufacturing",
+        "business park",
+        "office building",
+        "shopping center",
+        "strip mall",
+    ]
+
+
+def dedupe_by_place_id(business_lists: List[List[Dict]]) -> List[Dict]:
+    """
+    Merge multiple business lists together and remove duplicates
+    based on Google place_id.
+    """
+    seen: Set[str] = set()
+    merged: List[Dict] = []
+
+    for blist in business_lists:
+        for b in blist:
+            pid = b.get("place_id")
+            if not pid:
+                continue
+            if pid in seen:
+                continue
+            seen.add(pid)
+            merged.append(b)
+
+    return merged
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Find business leads with address, owner info, and public emails."
+        description="Find commercial business leads with address, optional owner info, and public emails."
     )
     parser.add_argument("--city", required=True, help="City to search, e.g. 'San Jose'")
-    parser.add_argument("--state", required=True, help="State code, e.g. 'CA'")
     parser.add_argument(
-        "--keyword",
-        required=True,
-        help="Type of business, e.g. 'warehouse', 'winery', 'shopping center', etc.",
+        "--state",
+        default="CA",
+        help="State code, default 'CA' (California).",
     )
     parser.add_argument(
-        "--max-results",
+        "--keyword",
+        help="Custom keyword, e.g. 'winery', 'warehouse', etc. "
+             "If you pass this, only this keyword is used.",
+    )
+    parser.add_argument(
+        "--commercial",
+        action="store_true",
+        help="If set, searches a bundle of commercial-building keywords (warehouses, industrial, offices, etc.)",
+    )
+    parser.add_argument(
+        "--max-per-keyword",
         type=int,
         default=30,
-        help="Max number of businesses to pull from Google Places.",
+        help="Max number of businesses to pull from Google Places per keyword.",
     )
     parser.add_argument(
         "--output",
@@ -196,17 +246,44 @@ def main():
         delay_between_requests=REQUEST_DELAY_SECONDS,
     )
 
-    print(f"Searching for '{args.keyword}' in {args.city}, {args.state}...")
-    businesses = lf.search_businesses(
-        city=args.city,
-        state=args.state,
-        keyword=args.keyword,
-        max_results=args.max_results,
-    )
-    print(f"Found {len(businesses)} businesses, fetching details...")
+    # Decide which keywords to use
+    keywords: List[str]
+    if args.keyword:
+        keywords = [args.keyword]
+        print(f"Using custom keyword: {args.keyword!r}")
+    elif args.commercial:
+        keywords = build_commercial_keywords()
+        print("Using commercial keyword bundle:")
+        for kw in keywords:
+            print(f"  - {kw}")
+    else:
+        # Default if nothing specified: generic commercial building
+        keywords = ["commercial building"]
+        print("No keyword or --commercial given. Using default keyword: 'commercial building'")
+
+    all_business_lists: List[List[Dict]] = []
+
+    # 1) SEARCH FOR EACH KEYWORD
+    for kw in keywords:
+        print(f"\nSearching for '{kw}' in {args.city}, {args.state}...")
+        businesses = lf.search_businesses(
+            city=args.city,
+            state=args.state,
+            keyword=kw,
+            max_results=args.max_per_keyword,
+        )
+        print(f"  Found {len(businesses)} results for keyword '{kw}'")
+        all_business_lists.append(businesses)
+        # Small pause between keyword batches
+        time.sleep(1.0)
+
+    # Merge & dedupe by place_id
+    merged_businesses = dedupe_by_place_id(all_business_lists)
+    print(f"\nTotal unique businesses after merging/deduping: {len(merged_businesses)}")
 
     rows = []
-    for idx, b in enumerate(businesses, start=1):
+    total = len(merged_businesses)
+    for idx, b in enumerate(merged_businesses, start=1):
         place_id = b.get("place_id")
         if not place_id:
             continue
@@ -234,7 +311,7 @@ def main():
         rows.append(row)
 
         print(
-            f"[{idx}/{len(businesses)}] {row['business_name'] or 'Unknown'} "
+            f"[{idx}/{total}] {row['business_name'] or 'Unknown'} "
             f"- {row['property_address'] or 'No address'} "
             f"- Emails: {email_list_str or 'none'}"
         )
