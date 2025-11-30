@@ -407,7 +407,8 @@ if not df_dates.empty:
         df_dates["next_follow_up"], errors="coerce"
     ).dt.date
 else:
-    df_dates["next_follow_up_date"] = []
+    # empty dataframe: just create the column with no rows
+    df_dates["next_follow_up_date"] = pd.Series(dtype="object")
 
 # ============================================================
 # STATS ROW
@@ -946,7 +947,7 @@ with tab_email:
 with tab_calendar:
     st.subheader("Calendar & Reminders")
 
-    if df_dates.empty:
+    if df_dates.empty or df_dates["next_follow_up_date"].isna().all():
         st.info("No follow-up dates found yet. Add customers with a 'Next Follow-Up' date first.")
     else:
         # Pick a date (built-in calendar widget)
@@ -1008,7 +1009,7 @@ with tab_calendar:
                         </td>
                         """
                     else:
-                        cal_html += f""";
+                        cal_html += f"""
                         <td style="
                             padding:0.4rem;
                             height:2rem;
