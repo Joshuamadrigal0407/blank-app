@@ -18,14 +18,16 @@ USERS_FILE = "users.csv"  # for login/sign-up accounts
 # Your logo (from ECI Foam Systems site / assets)
 LOGO_URL = "https://images.leadconnectorhq.com/image/f_webp/q_80/r_1200/u_https%3A//assets.cdn.filesafe.space/lkH7W8xbGl6pzt92LyGS/media/681428e788b94e7763044d2f.png"
 
-# Brand colors - brighter & easier to read
-PRIMARY_COLOR = "#f59e0b"  # bright amber / orange
-DARK_HEADER = "#111827"    # slate-900
-LIGHT_BG = "#f3f4f6"       # gray-100
-CARD_BG = "#ffffff"        # white card
-TEXT_COLOR = "#111827"     # near-black
-MUTED_TEXT = "#6b7280"     # gray-500
-BORDER_COLOR = "#e5e7eb"   # gray-200
+# Futuristic / neon-ish colors
+PRIMARY_COLOR = "#22d3ee"  # cyan / neon accent
+ACCENT_COLOR = "#a855f7"   # purple accent
+DARK_BG = "#020617"        # dark background
+GRADIENT_1 = "#0f172a"
+GRADIENT_2 = "#020617"
+CARD_BG = "rgba(15,23,42,0.9)"
+TEXT_COLOR = "#e5e7eb"
+MUTED_TEXT = "#9ca3af"
+BORDER_COLOR = "rgba(148,163,184,0.5)"
 
 
 # ============================================================
@@ -152,12 +154,12 @@ st.set_page_config(
     layout="wide",
 )
 
-# Global styling: brighter theme, visible colors, clean cards
+# Global styling: futuristic gradient + glass cards
 st.markdown(
     f"""
     <style>
         .stApp {{
-            background-color: {LIGHT_BG};
+            background: radial-gradient(circle at top left, {GRADIENT_1} 0, {GRADIENT_2} 45%, #000000 100%);
             color: {TEXT_COLOR};
         }}
         .block-container {{
@@ -167,22 +169,23 @@ st.markdown(
         }}
         h1, h2, h3, h4 {{
             color: {TEXT_COLOR};
-            letter-spacing: 0.03em;
+            letter-spacing: 0.04em;
         }}
         .crm-header {{
-            background: linear-gradient(135deg, {DARK_HEADER}, #020617);
-            border-radius: 1rem;
+            background: linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,64,175,0.95));
+            border-radius: 1.1rem;
             padding: 1.25rem 1.5rem;
             display: flex;
             align-items: center;
             gap: 1.25rem;
-            box-shadow: 0 14px 35px rgba(15,23,42,0.45);
+            box-shadow: 0 18px 45px rgba(15,23,42,0.85);
+            border: 1px solid {BORDER_COLOR};
         }}
         .crm-header-text-main {{
-            font-size: 1.5rem;
-            font-weight: 700;
+            font-size: 1.6rem;
+            font-weight: 750;
             color: #f9fafb;
-            margin-bottom: 0.25rem;
+            margin-bottom: 0.2rem;
         }}
         .crm-header-text-sub {{
             font-size: 0.9rem;
@@ -193,22 +196,24 @@ st.markdown(
             display: inline-block;
             margin-top: 0.4rem;
             font-size: 0.75rem;
-            color: #f9fafb;
+            color: #e5e7eb;
             padding: 0.25rem 0.7rem;
             border-radius: 999px;
-            border: 1px solid rgba(249,250,251,0.35);
+            border: 1px solid rgba(248,250,252,0.4);
+            background: linear-gradient(90deg, rgba(34,211,238,0.15), rgba(168,85,247,0.15));
         }}
         .crm-card {{
             background: {CARD_BG};
             border-radius: 0.9rem;
             padding: 1rem 1.25rem;
             border: 1px solid {BORDER_COLOR};
-            box-shadow: 0 12px 28px rgba(148,163,184,0.25);
+            box-shadow: 0 14px 34px rgba(15,23,42,0.8);
+            backdrop-filter: blur(14px);
         }}
         .stat-number {{
             font-size: 1.6rem;
             font-weight: 700;
-            color: {TEXT_COLOR};
+            color: #f9fafb;
         }}
         .stat-label {{
             font-size: 0.8rem;
@@ -218,6 +223,14 @@ st.markdown(
         }}
         .dataframe td, .dataframe th {{
             font-size: 0.85rem;
+        }}
+        /* center auth box a bit */
+        .auth-card {{
+            background: {CARD_BG};
+            border-radius: 1rem;
+            padding: 1.5rem 1.75rem;
+            border: 1px solid {BORDER_COLOR};
+            box-shadow: 0 18px 40px rgba(15,23,42,0.85);
         }}
     </style>
     """,
@@ -229,8 +242,23 @@ st.markdown(
 # ============================================================
 
 def auth_screen():
-    st.markdown("## 🔐 ECI Foam Systems CRM")
+    logo_col, _ = st.columns([1, 3])
+    with logo_col:
+        st.image(LOGO_URL, use_column_width=True)
 
+    st.markdown(
+        """
+        <div style="margin-top: 0.5rem; margin-bottom: 1rem;">
+            <h2 style="margin-bottom: 0.25rem;">ECI Foam Systems CRM</h2>
+            <p style="color:#cbd5f5; font-size:0.9rem; margin:0;">
+                Secure login • Customer management • Calendar & reminders • Built-in email
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<div class="auth-card">', unsafe_allow_html=True)
     tab_login, tab_signup = st.tabs(["Login", "Create Account"])
 
     # LOGIN TAB
@@ -269,6 +297,7 @@ def auth_screen():
             else:
                 create_user(signup_email, signup_password)
                 st.success("Account created. You can now log in on the Login tab.")
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # Init auth state
@@ -299,7 +328,7 @@ with header_col1:
 
 with header_col2:
     st.markdown(
-        """
+        f"""
         <div class="crm-header">
             <div style="flex: 1;">
                 <div class="crm-header-text-main">ECI Foam Systems CRM</div>
@@ -323,6 +352,15 @@ st.write("")  # spacer
 # ============================================================
 
 df = load_data()
+
+# For calendar: parse next_follow_up into actual dates
+df_dates = df.copy()
+if not df_dates.empty:
+    df_dates["next_follow_up_date"] = pd.to_datetime(
+        df_dates["next_follow_up"], errors="coerce"
+    ).dt.date
+else:
+    df_dates["next_follow_up_date"] = []
 
 # ============================================================
 # STATS ROW
@@ -421,11 +459,17 @@ if search_text.strip():
     filtered = filtered[mask]
 
 # ============================================================
-# TABS (VIEW / ADD / EDIT / EMAIL)
+# TABS (VIEW / ADD / EDIT / EMAIL / CALENDAR)
 # ============================================================
 
-tab_view, tab_add, tab_edit, tab_email = st.tabs(
-    ["📋 Customers & Leads", "➕ Add Customer / Lead", "✏️ Edit Customer / Lead", "📧 Email Client"]
+tab_view, tab_add, tab_edit, tab_email, tab_calendar = st.tabs(
+    [
+        "📋 Customers & Leads",
+        "➕ Add Customer / Lead",
+        "✏️ Edit Customer / Lead",
+        "📧 Email Client",
+        "📅 Calendar & Reminders",
+    ]
 )
 
 # ------------------------------------------------------------
@@ -781,12 +825,11 @@ with tab_edit:
 
 with tab_email:
     st.subheader("Email Client (Yahoo)")
-
     st.markdown(
         "Use your **Yahoo email + app password** to email customers directly from the CRM."
     )
     st.markdown(
-        "*Tip: In Yahoo account security, create an **app password** for SMTP and use it here.*"
+        "*Tip: In Yahoo account security, create an **app password** for SMTP and use it here (not your main password).*"
     )
 
     col_left, col_right = st.columns(2)
@@ -794,7 +837,9 @@ with tab_email:
     with col_left:
         yahoo_email = st.text_input("Your Yahoo Email (From)")
         yahoo_app_password = st.text_input(
-            "Yahoo App Password", type="password", help="Use a Yahoo app password, not your main login password."
+            "Yahoo App Password",
+            type="password",
+            help="Use a Yahoo app password, not your main login password.",
         )
 
         if df.empty:
@@ -817,7 +862,7 @@ with tab_email:
             selected_name = row_email.get("customer_name", "")
 
     with col_right:
-        to_email = st.text_input("To", value=selected_email if df is not None else "")
+        to_email = st.text_input("To", value=selected_email)
         default_subject = "Regarding your spray foam roofing / coating project"
         subject = st.text_input("Subject", value=default_subject)
 
@@ -848,3 +893,129 @@ with tab_email:
                 st.success("Email sent successfully.")
             except Exception as e:
                 st.error(f"Failed to send email: {e}")
+
+# ------------------------------------------------------------
+# TAB 5: CALENDAR & REMINDERS
+# ------------------------------------------------------------
+
+with tab_calendar:
+    st.subheader("Calendar & Reminders")
+
+    if df_dates.empty:
+        st.info("No follow-up dates found yet. Add customers with a 'Next Follow-Up' date first.")
+    else:
+        # Calendar picker
+        selected_date = st.date_input("Select date", value=date.today())
+        todays_rows = df_dates[df_dates["next_follow_up_date"] == selected_date]
+
+        st.markdown(
+            f"**Follow-ups on {selected_date.strftime('%b %d, %Y')}:** {len(todays_rows)}"
+        )
+
+        if todays_rows.empty:
+            st.info("No follow-ups scheduled for this date.")
+        else:
+            # Show table of follow-ups
+            show_cols = [
+                "customer_name",
+                "company_name",
+                "phone",
+                "email",
+                "address",
+                "city",
+                "service_type",
+                "status",
+                "next_follow_up",
+            ]
+            available_cols = [c for c in show_cols if c in todays_rows.columns]
+
+            st.markdown('<div class="crm-card">', unsafe_allow_html=True)
+            st.dataframe(todays_rows[available_cols], use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # Email reminders section
+            st.markdown("#### Send Reminder Emails (Yahoo)")
+
+            col_y1, col_y2 = st.columns(2)
+            with col_y1:
+                cal_yahoo_email = st.text_input(
+                    "Your Yahoo Email (From)", key="cal_yahoo_email"
+                )
+            with col_y2:
+                cal_yahoo_app_password = st.text_input(
+                    "Yahoo App Password",
+                    type="password",
+                    help="Use a Yahoo app password, not your main login password.",
+                    key="cal_yahoo_password",
+                )
+
+            # Choose which leads to remind
+            todays_rows["rem_label"] = (
+                todays_rows["customer_name"].fillna("")
+                + " | "
+                + todays_rows["company_name"].fillna("")
+                + " | "
+                + todays_rows["email"].fillna("")
+            )
+            selected_labels = st.multiselect(
+                "Select customers to send reminders to",
+                todays_rows["rem_label"].tolist(),
+                default=todays_rows["rem_label"].tolist(),
+            )
+
+            # Default reminder subject/body
+            reminder_subject = st.text_input(
+                "Reminder email subject",
+                value="Quick follow-up on your spray foam project",
+            )
+            base_body = (
+                "Just a quick reminder about your spray foam / roof coating project.\n\n"
+                "Let us know if you have any questions or if you're ready to move forward.\n\n"
+                "Best regards,\n"
+                "ECI Foam Systems"
+            )
+            reminder_body = st.text_area(
+                "Reminder email message (template used for each selected customer)",
+                value=base_body,
+                height=200,
+            )
+
+            if st.button("📨 Send Reminder Emails to Selected"):
+                if not (cal_yahoo_email and cal_yahoo_app_password):
+                    st.error("Please fill in your Yahoo email and app password.")
+                elif not selected_labels:
+                    st.error("Select at least one customer to send reminders to.")
+                else:
+                    errors = 0
+                    count = 0
+                    for lbl in selected_labels:
+                        row = todays_rows[todays_rows["rem_label"] == lbl].iloc[0]
+                        to_email = row.get("email", "").strip()
+                        name = row.get("customer_name", "").strip()
+
+                        if not to_email:
+                            continue
+
+                        # Personalize greeting a bit
+                        if name:
+                            body = f"Hi {name},\n\n{reminder_body}"
+                        else:
+                            body = reminder_body
+
+                        try:
+                            send_yahoo_email(
+                                from_email=cal_yahoo_email,
+                                app_password=cal_yahoo_app_password,
+                                to_email=to_email,
+                                subject=reminder_subject,
+                                body=body,
+                            )
+                            count += 1
+                        except Exception as e:
+                            errors += 1
+                            st.error(f"Failed for {to_email}: {e}")
+
+                    st.success(
+                        f"Reminder emails sent: {count}. "
+                        + (f"Errors: {errors}." if errors else "")
+                    )
