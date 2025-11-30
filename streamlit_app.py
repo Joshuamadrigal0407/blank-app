@@ -6,6 +6,13 @@ from datetime import date
 
 DATA_FILE = "sprayfoam_crm.csv"
 
+# Brand assets / colors (from ecifoamsystems.com)
+LOGO_URL = "https://images.leadconnectorhq.com/image/f_webp/q_80/r_1200/u_https%3A//assets.cdn.filesafe.space/lkH7W8xbGl6pzt92LyGS/media/681428e788b94e7763044d2f.png"
+PRIMARY_COLOR = "#fbbf24"  # warm yellow / amber accent
+DARK_BG = "#020617"        # very dark slate
+CARD_BG = "rgba(15,23,42,0.9)"
+BORDER_COLOR = "rgba(148,163,184,0.4)"
+
 # -----------------------------
 # Helpers to load/save data
 # -----------------------------
@@ -49,20 +56,143 @@ def new_id():
 # -----------------------------
 # Streamlit UI setup
 # -----------------------------
-st.set_page_config(page_title="Spray Foam CRM", layout="wide")
-
-st.title("🧯 Spray Foam Business CRM")
-st.caption(
-    "Track spray foam and roof coating customers, leads, quotes, jobs, and follow-ups. "
-    "All data is stored locally in 'sprayfoam_crm.csv' in this folder."
+st.set_page_config(
+    page_title="ECI Foam Systems CRM",
+    page_icon=LOGO_URL,
+    layout="wide",
 )
+
+# Global styling
+st.markdown(
+    f"""
+    <style>
+        .stApp {{
+            background: radial-gradient(circle at top left, #1e293b 0, #020617 45%, #000000 100%);
+            color: #e5e7eb;
+        }}
+        .block-container {{
+            padding-top: 1.5rem;
+            padding-bottom: 2rem;
+            max-width: 1200px;
+        }}
+        h1, h2, h3, h4 {{
+            color: {PRIMARY_COLOR};
+            letter-spacing: 0.03em;
+        }}
+        .crm-card {{
+            background: {CARD_BG};
+            border-radius: 0.9rem;
+            padding: 1rem 1.25rem;
+            border: 1px solid {BORDER_COLOR};
+            box-shadow: 0 18px 40px rgba(15,23,42,0.65);
+        }}
+        .stat-number {{
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #f9fafb;
+        }}
+        .stat-label {{
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: #9ca3af;
+        }}
+        .stat-pill {{
+            font-size: 0.75rem;
+            padding: 0.1rem 0.5rem;
+            border-radius: 999px;
+            background: rgba(15,23,42,0.8);
+            border: 1px solid {BORDER_COLOR};
+            color: #e5e7eb;
+        }}
+        /* tighten table text a bit */
+        .dataframe td, .dataframe th {{
+            font-size: 0.85rem;
+        }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Header with logo & title
+header_col1, header_col2 = st.columns([1, 3])
+with header_col1:
+    st.image(LOGO_URL, use_column_width=True)
+with header_col2:
+    st.markdown(
+        f"""
+        <div class="crm-card" style="margin-bottom: 0.75rem;">
+            <h1 style="margin-bottom: 0.15rem;">ECI Foam Systems CRM</h1>
+            <p style="margin: 0; color: #cbd5f5; font-size: 0.95rem;">
+                Track spray foam roofing, coatings, and insulation jobs from first call to completed project.
+            </p>
+            <p style="margin: 0.25rem 0 0; font-size: 0.8rem; color: #9ca3af;">
+                Central Valley & Bay Area • Spray Foam Roofing • Roof Coatings • Tank & Cold Storage Insulation
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 df = load_data()
 
 # -----------------------------
+# Quick stats row
+# -----------------------------
+total_leads = len(df)
+open_statuses = ["New Lead", "Contacted", "Quoted", "Scheduled", "In Progress"]
+open_leads = df[df["status"].isin(open_statuses)].shape[0] if not df.empty else 0
+completed_jobs = df[df["status"] == "Completed"].shape[0] if not df.empty else 0
+lost_leads = df[df["status"] == "Lost"].shape[0] if not df.empty else 0
+
+stat1, stat2, stat3, stat4 = st.columns(4)
+with stat1:
+    st.markdown(
+        f"""
+        <div class="crm-card">
+            <div class="stat-label">Total Records</div>
+            <div class="stat-number">{total_leads}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+with stat2:
+    st.markdown(
+        f"""
+        <div class="crm-card">
+            <div class="stat-label">Open / Active</div>
+            <div class="stat-number">{open_leads}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+with stat3:
+    st.markdown(
+        f"""
+        <div class="crm-card">
+            <div class="stat-label">Completed Jobs</div>
+            <div class="stat-number">{completed_jobs}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+with stat4:
+    st.markdown(
+        f"""
+        <div class="crm-card">
+            <div class="stat-label">Lost Leads</div>
+            <div class="stat-number">{lost_leads}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+st.write("")  # small spacer
+
+# -----------------------------
 # Sidebar filters
 # -----------------------------
-st.sidebar.header("🔍 Filters")
+st.sidebar.header("🔎 Filters")
 
 status_options = ["All"] + sorted([s for s in df["status"].dropna().unique()])
 status_filter = st.sidebar.selectbox("Status", status_options)
@@ -98,7 +228,9 @@ if search_text.strip():
 # -----------------------------
 # Tabs
 # -----------------------------
-tab_view, tab_add, tab_edit = st.tabs(["📋 Customers & Leads", "➕ Add Customer / Lead", "✏️ Edit Customer / Lead"])
+tab_view, tab_add, tab_edit = st.tabs(
+    ["📋 Customers & Leads", "➕ Add Customer / Lead", "✏️ Edit Customer / Lead"]
+)
 
 # -----------------------------
 # View tab
@@ -139,7 +271,7 @@ with tab_add:
     st.subheader("Add Customer / Lead")
 
     with st.form("add_lead_form"):
-        st.markdown("### 👤 Customer Information")
+        st.markdown("#### 👤 Customer Information")
         c1, c2 = st.columns(2)
 
         with c1:
@@ -154,7 +286,7 @@ with tab_add:
             state_val = st.text_input("State", value="CA")
             zip_code = st.text_input("ZIP Code")
 
-        st.markdown("### 🏗 Job / Spray Foam Details")
+        st.markdown("#### 🏗 Job / Spray Foam Details")
         c3, c4 = st.columns(2)
 
         with c3:
@@ -186,28 +318,27 @@ with tab_add:
             )
             square_feet = st.text_input("Approx. Square Feet (roof/area)")
             estimated_value = st.text_input("Estimated Job Value ($)")
-
-        status = st.selectbox(
-            "Status",
-            [
-                "New Lead",
-                "Contacted",
-                "Quoted",
-                "Scheduled",
-                "In Progress",
-                "Completed",
-                "Lost",
-                "Existing Customer",
-            ],
-        )
-        next_follow_up = st.date_input(
-            "Next Follow-Up Date",
-            value=date.today(),
-        )
+            status = st.selectbox(
+                "Status",
+                [
+                    "New Lead",
+                    "Contacted",
+                    "Quoted",
+                    "Scheduled",
+                    "In Progress",
+                    "Completed",
+                    "Lost",
+                    "Existing Customer",
+                ],
+            )
+            next_follow_up = st.date_input(
+                "Next Follow-Up Date",
+                value=date.today(),
+            )
 
         notes = st.text_area("Notes (scope, conditions, objections, etc.)")
 
-        submitted = st.form_submit_button("Save")
+        submitted = st.form_submit_button("💾 Save")
 
     if submitted:
         if not customer_name.strip() and not company_name.strip():
@@ -260,7 +391,7 @@ with tab_edit:
         selected_idx = df[df["label"] == selected_label].index[0]
 
         with st.form("edit_lead_form"):
-            st.markdown("### 👤 Customer Information")
+            st.markdown("#### 👤 Customer Information")
             c1, c2 = st.columns(2)
 
             with c1:
@@ -289,7 +420,7 @@ with tab_edit:
                     "ZIP Code", value=selected_row.get("zip_code", "")
                 )
 
-            st.markdown("### 🏗 Job / Spray Foam Details")
+            st.markdown("#### 🏗 Job / Spray Foam Details")
             c3, c4 = st.columns(2)
 
             with c3:
