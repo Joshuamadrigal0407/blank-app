@@ -7,7 +7,7 @@ import hashlib
 import smtplib
 import ssl
 from email.message import EmailMessage
-import calendar  # still imported if you want it later
+import calendar  # used for month view calendar
 
 # ============================================================
 # SETTINGS / CONFIG
@@ -962,68 +962,162 @@ with tab_email:
                 st.error(f"Failed to send email: {e}")
 
 # ------------------------------------------------------------
-# TAB 5: CALENDAR & REMINDERS – LIVE 30 DAY VIEW
+# TAB 5: CALENDAR & REMINDERS – MONTH VIEW (GOOGLE-LIKE)
 # ------------------------------------------------------------
 
 with tab_calendar:
-    st.subheader("Calendar & Reminders – Next 30 Days")
+    st.subheader("Calendar & Reminders – Month View")
 
+    # No followup dates at all
     if df_dates.empty or df_dates["next_follow_up_date"].isna().all():
         st.info("No follow-up dates found yet. Add customers with a 'Next Follow-Up' date first.")
     else:
-        start_date = today
-        end_date = today + timedelta(days=30)
+        # Let user pick any date; we use its month & year
+        selected_date = st.date_input("Choose a month to view", value=today)
+        year = selected_date.year
+        month = selected_date.month
 
-        # Filter for next 30 days
-        upcoming = df_dates[
-            (df_dates["next_follow_up_date"] >= start_date)
-            & (df_dates["next_follow_up_date"] <= end_date)
+        # Boundaries of that month
+        month_start = date(year, month, 1)
+        last_day = calendar.monthrange(year, month)[1]
+        month_end = date(year, month, last_day)
+
+        # Filter follow-ups within that month
+        month_rows = df_dates[
+            (df_dates["next_follow_up_date"] >= month_start)
+            & (df_dates["next_follow_up_date"] <= month_end)
         ].copy()
 
+        month_name = calendar.month_name[month]
         st.markdown(
-            f"Showing follow-ups from **{start_date.strftime('%b %d, %Y')}** "
-            f"to **{end_date.strftime('%b %d, %Y')}**."
+            f"Showing follow-ups for **{month_name} {year}** "
+            f"({month_start.strftime('%b %d')} – {month_end.strftime('%b %d')})."
         )
 
-        if upcoming.empty:
-            st.info("No follow-ups scheduled in the next 30 days.")
-        else:
-            # Sort by date then status
-            upcoming = upcoming.sort_values(
-                by=["next_follow_up_date", "status"],
-                na_position="last",
+        # Build a month grid similar to Google Calendar
+        cal = calendar.Calendar(firstweekday=6)  # 6 = Sunday start (Sun–Sat)
+
+        cal_html_parts = []
+        cal_html_parts.append(
+            f"""
+            <div class="crm-card" style="margin-bottom: 1rem;">
+                <h4 style="margin-top:0; margin-bottom:0.5rem;">{month_name} {year}</h4>
+                <table style="width:100%; border-collapse:collapse; text-align:center; font-size:0.8rem;">
+                    <thead>
+                        <tr>
+            """
+        )
+
+        # Weekday headers
+        for wd in ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]:
+            cal_html_parts.append(
+                f'<th style="padding:0.4rem; border-bottom:1px solid {BORDER_COLOR}; '
+                f'color:{MUTED_TEXT}; font-weight:600;">{wd}</th>'
             )
 
+        cal_html_parts.append("</tr></thead><tbody>")
+
+        # Weeks & days
+        for week in cal.monthdayscalendar(year, month):
+            cal_html_parts.append("<tr>")
+            for day_num in week:
+                if day_num == 0:
+                    # Empty cell (days from previous/next month)
+                    cal_html_parts.append(
+                        '<td style="padding:6px; height:90px; border:1px solid '
+                        f'{BORDER_COLOR}; background-color:#f9fafb;"></td>'
+                    )
+                else:
+                    day_date = date(year, month, day_num)
+                    # All follow-ups for this exact date
+                    day_rows = month_rows[
+                        month_rows["next_follow_up_date"] == day_date
+                    ]
+
+                    has_events = not day_rows.empty
+                    is_today = (day_date == today)
+
+                    # Base style for the day cell
+                    cell_style = (
+                        "padding:6px; height:90px; vertical-align:top; "
+                        f"border:1px solid {BORDER_COLOR}; text-align:left; "
+                        "background-color:#ffffff;"
+                    )
+
+                    if has_events:
+                        cell_style = cell_style.replace(
+                            "background-color:#ffffff;",
+                            "background-color:rgba(37,99,235,0.04);"
+                        )
+                    if is_today:
+                        cell_style += f" box-shadow:0 0 0 2px {ACCENT_COLOR} inset;"
+
+                    # Build inner HTML: day number + up to 3 events
+                    cell_inner_parts = []
+                    cell_inner_parts.append(
+                        f'<div style="font-weight:600; font-size:0.8rem; '
+                        f'margin-bottom:4px; color:{TEXT_COLOR};">{day_num}</div>'
+                    )
+
+                    if has_events:
+                        # Show up to 3 follow-ups
+                        for _, r in day_rows.head(3).iterrows():
+                            name = (r.get("customer_name") or r.get("company_name") or "Job")
+                            name = name.strip()
+                            if len(name) > 22:
+                                name = name[:21] + "…"
+
+                            service = (r.get("service_type") or "").strip()
+                            service_txt = f" – {service}" if service else ""
+
+                            cell_inner_parts.append(
+                                '<div style="font-size:0.72rem; padding:2px 4px; '
+                                'margin-bottom:2px; border-radius:4px; '
+                                f'background-color:rgba(37,99,235,0.12); color:{TEXT_COLOR}; '
+                                'overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">'
+                                f'{name}{service_txt}'
+                                '</div>'
+                            )
+
+                        # If more than 3, show "+X more"
+                        extra = len(day_rows) - 3
+                        if extra > 0:
+                            cell_inner_parts.append(
+                                '<div style="font-size:0.7rem; color:#4b5563;">'
+                                f'+{extra} more…'
+                                '</div>'
+                            )
+
+                    cell_inner_html = "".join(cell_inner_parts)
+                    cal_html_parts.append(
+                        f'<td style="{cell_style}">{cell_inner_html}</td>'
+                    )
+
+            cal_html_parts.append("</tr>")
+
+        cal_html_parts.append("</tbody></table></div>")
+        cal_html = "".join(cal_html_parts)
+
+        st.markdown(cal_html, unsafe_allow_html=True)
+
+        # Optional: below calendar, show table of all follow-ups for the month
+        if not month_rows.empty:
             show_cols = [
                 "next_follow_up_date",
                 "customer_name",
                 "company_name",
-                "phone",
-                "email",
-                "address",
                 "city",
                 "service_type",
                 "status",
+                "phone",
+                "email",
             ]
-            available_cols = [c for c in show_cols if c in upcoming.columns]
-
-            # Rename column for nicer display
-            upcoming_display = upcoming[available_cols].rename(
+            available_cols = [c for c in show_cols if c in month_rows.columns]
+            month_display = month_rows[available_cols].rename(
                 columns={"next_follow_up_date": "follow_up_date"}
-            )
+            ).sort_values("follow_up_date")
 
-            st.markdown("### 📅 Upcoming Follow-Ups (Next 30 Days)")
+            st.markdown("### 📋 Follow-Ups in This Month")
             st.markdown('<div class="crm-card">', unsafe_allow_html=True)
-            st.dataframe(upcoming_display, use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-            # Optional: quick count per day
-            if "id" in upcoming.columns:
-                counts = upcoming.groupby("next_follow_up_date")["id"].count()
-            else:
-                counts = upcoming.groupby("next_follow_up_date").size()
-            counts = counts.reset_index()
-            counts.columns = ["date", "follow_ups"]
-
-            st.markdown("#### Daily Follow-Up Count")
-            st.table(counts)
+            st.dataframe(month_display, use_container_width=True)
+            st.markmarkdown("</div>", unsafe_allow_html=True)
