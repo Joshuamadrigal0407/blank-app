@@ -53,7 +53,7 @@ st.set_page_config(page_title="Spray Foam CRM", layout="wide")
 
 st.title("🧯 Spray Foam Business CRM")
 st.caption(
-    "Track spray foam and roof coating leads, quotes, jobs, and follow-ups. "
+    "Track spray foam and roof coating customers, leads, quotes, jobs, and follow-ups. "
     "All data is stored locally in 'sprayfoam_crm.csv' in this folder."
 )
 
@@ -73,7 +73,7 @@ city_filter = st.sidebar.selectbox("City", city_options)
 service_options = ["All"] + sorted([s for s in df["service_type"].dropna().unique()])
 service_filter = st.sidebar.selectbox("Service Type", service_options)
 
-search_text = st.sidebar.text_input("Search name / company / address", "")
+search_text = st.sidebar.text_input("Search customer / company / address", "")
 
 filtered = df.copy()
 
@@ -98,13 +98,13 @@ if search_text.strip():
 # -----------------------------
 # Tabs
 # -----------------------------
-tab_view, tab_add, tab_edit = st.tabs(["📋 Leads", "➕ Add Lead", "✏️ Edit Lead"])
+tab_view, tab_add, tab_edit = st.tabs(["📋 Customers & Leads", "➕ Add Customer / Lead", "✏️ Edit Customer / Lead"])
 
 # -----------------------------
 # View tab
 # -----------------------------
 with tab_view:
-    st.subheader(f"Leads ({len(filtered)})")
+    st.subheader(f"Customers & Leads ({len(filtered)})")
 
     display_cols = [
         "customer_name",
@@ -133,12 +133,13 @@ with tab_view:
     )
 
 # -----------------------------
-# Add Lead tab
+# Add Customer / Lead tab
 # -----------------------------
 with tab_add:
-    st.subheader("Add New Lead")
+    st.subheader("Add Customer / Lead")
 
     with st.form("add_lead_form"):
+        st.markdown("### 👤 Customer Information")
         c1, c2 = st.columns(2)
 
         with c1:
@@ -146,15 +147,20 @@ with tab_add:
             company_name = st.text_input("Company Name (optional)")
             phone = st.text_input("Phone")
             email = st.text_input("Email")
+
+        with c2:
             address = st.text_input("Job / Property Address")
             city = st.text_input("City")
             state_val = st.text_input("State", value="CA")
             zip_code = st.text_input("ZIP Code")
 
-        with c2:
+        st.markdown("### 🏗 Job / Spray Foam Details")
+        c3, c4 = st.columns(2)
+
+        with c3:
             lead_source = st.selectbox(
                 "Lead Source",
-                ["", "Referral", "Google", "Website", "Facebook", "Cold Call", "Other"],
+                ["", "Referral", "Google", "Website", "Facebook", "Cold Call", "Repeat Customer", "Other"],
             )
             building_type = st.selectbox(
                 "Building Type",
@@ -172,32 +178,36 @@ with tab_add:
                     "Other",
                 ],
             )
+
+        with c4:
             roof_type = st.selectbox(
                 "Roof Type",
                 ["", "Flat", "Metal", "TPO/PVC", "Shingle", "Tile", "Other"],
             )
             square_feet = st.text_input("Approx. Square Feet (roof/area)")
             estimated_value = st.text_input("Estimated Job Value ($)")
-            status = st.selectbox(
-                "Status",
-                [
-                    "New",
-                    "Contacted",
-                    "Quoted",
-                    "Scheduled",
-                    "In Progress",
-                    "Completed",
-                    "Lost",
-                ],
-            )
-            next_follow_up = st.date_input(
-                "Next Follow-Up Date",
-                value=date.today(),
-            )
+
+        status = st.selectbox(
+            "Status",
+            [
+                "New Lead",
+                "Contacted",
+                "Quoted",
+                "Scheduled",
+                "In Progress",
+                "Completed",
+                "Lost",
+                "Existing Customer",
+            ],
+        )
+        next_follow_up = st.date_input(
+            "Next Follow-Up Date",
+            value=date.today(),
+        )
 
         notes = st.text_area("Notes (scope, conditions, objections, etc.)")
 
-        submitted = st.form_submit_button("Save Lead")
+        submitted = st.form_submit_button("Save")
 
     if submitted:
         if not customer_name.strip() and not company_name.strip():
@@ -225,17 +235,17 @@ with tab_add:
             }
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
             save_data(df)
-            st.success("Lead saved.")
+            st.success("Customer / lead saved.")
             st.experimental_rerun()
 
 # -----------------------------
-# Edit Lead tab
+# Edit tab
 # -----------------------------
 with tab_edit:
-    st.subheader("Edit Existing Lead")
+    st.subheader("Edit Customer / Lead")
 
     if df.empty:
-        st.info("No leads to edit yet. Add some leads first.")
+        st.info("No records to edit yet. Add some first.")
     else:
         df["label"] = (
             df["customer_name"].fillna("")
@@ -245,11 +255,12 @@ with tab_edit:
             + df["address"].fillna("")
         )
 
-        selected_label = st.selectbox("Select a lead", df["label"].tolist())
+        selected_label = st.selectbox("Select a record to edit", df["label"].tolist())
         selected_row = df[df["label"] == selected_label].iloc[0]
         selected_idx = df[df["label"] == selected_label].index[0]
 
         with st.form("edit_lead_form"):
+            st.markdown("### 👤 Customer Information")
             c1, c2 = st.columns(2)
 
             with c1:
@@ -265,6 +276,8 @@ with tab_edit:
                 email_e = st.text_input(
                     "Email", value=selected_row.get("email", "")
                 )
+
+            with c2:
                 address_e = st.text_input(
                     "Job / Property Address", value=selected_row.get("address", "")
                 )
@@ -276,7 +289,10 @@ with tab_edit:
                     "ZIP Code", value=selected_row.get("zip_code", "")
                 )
 
-            with c2:
+            st.markdown("### 🏗 Job / Spray Foam Details")
+            c3, c4 = st.columns(2)
+
+            with c3:
                 lead_source_e = st.text_input(
                     "Lead Source", value=selected_row.get("lead_source", "")
                 )
@@ -322,6 +338,8 @@ with tab_edit:
                        ]
                     else 0,
                 )
+
+            with c4:
                 roof_type_e = st.selectbox(
                     "Roof Type",
                     ["", "Flat", "Metal", "TPO/PVC", "Shingle", "Tile", "Other"],
@@ -342,32 +360,35 @@ with tab_edit:
                 status_e = st.selectbox(
                     "Status",
                     [
-                        "New",
+                        "New Lead",
                         "Contacted",
                         "Quoted",
                         "Scheduled",
                         "In Progress",
                         "Completed",
                         "Lost",
+                        "Existing Customer",
                     ],
                     index=[
-                        "New",
+                        "New Lead",
                         "Contacted",
                         "Quoted",
                         "Scheduled",
                         "In Progress",
                         "Completed",
                         "Lost",
-                    ].index(selected_row.get("status", "New"))
-                    if selected_row.get("status", "New") in
+                        "Existing Customer",
+                    ].index(selected_row.get("status", "New Lead"))
+                    if selected_row.get("status", "New Lead") in
                        [
-                           "New",
+                           "New Lead",
                            "Contacted",
                            "Quoted",
                            "Scheduled",
                            "In Progress",
                            "Completed",
                            "Lost",
+                           "Existing Customer",
                        ]
                     else 0,
                 )
@@ -384,9 +405,9 @@ with tab_edit:
 
             col_btn1, col_btn2 = st.columns(2)
             with col_btn1:
-                update_btn = st.form_submit_button("💾 Update Lead")
+                update_btn = st.form_submit_button("💾 Update")
             with col_btn2:
-                delete_btn = st.form_submit_button("🗑️ Delete Lead")
+                delete_btn = st.form_submit_button("🗑️ Delete")
 
         if update_btn:
             df.at[selected_idx, "customer_name"] = customer_name_e
@@ -409,7 +430,7 @@ with tab_edit:
 
             df = df.drop(columns=["label"], errors="ignore")
             save_data(df)
-            st.success("Lead updated.")
+            st.success("Customer / lead updated.")
             st.experimental_rerun()
 
         if delete_btn:
@@ -417,6 +438,6 @@ with tab_edit:
             df = df.drop(columns=["label"], errors="ignore")
             df.reset_index(drop=True, inplace=True)
             save_data(df)
-            st.success("Lead deleted.")
+            st.success("Customer / lead deleted.")
             st.experimental_rerun()
 
