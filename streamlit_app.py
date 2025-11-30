@@ -7,6 +7,7 @@ import hashlib
 import smtplib
 import ssl
 from email.message import EmailMessage
+import calendar  # for month calendar
 
 # ============================================================
 # SETTINGS / CONFIG
@@ -903,8 +904,80 @@ with tab_calendar:
     if df_dates.empty:
         st.info("No follow-up dates found yet. Add customers with a 'Next Follow-Up' date first.")
     else:
-        # Calendar picker
-        selected_date = st.date_input("Select date", value=date.today())
+        # Pick a date (built-in calendar widget)
+        selected_date = st.date_input("Select date to view", value=date.today())
+
+        # Build month calendar for selected date's month
+        year = selected_date.year
+        month = selected_date.month
+
+        # All follow-up dates in this month
+        month_rows = df_dates[
+            (df_dates["next_follow_up_date"].notnull())
+            & (df_dates["next_follow_up_date"].apply(lambda d: d.year == year and d.month == month))
+        ]
+
+        days_with_followups = set(
+            d.day for d in month_rows["next_follow_up_date"] if pd.notna(d)
+        )
+
+        cal = calendar.Calendar(firstweekday=6)  # 6 = Sunday start
+
+        month_name = calendar.month_name[month]
+        cal_html = f"""
+        <div class="crm-card" style="margin-bottom: 1rem;">
+            <h4 style="margin-top:0; margin-bottom:0.5rem;">{month_name} {year}</h4>
+            <table style="width:100%; border-collapse:collapse; text-align:center; font-size:0.9rem;">
+                <thead>
+                    <tr>
+        """
+
+        # Weekday headers
+        for wd in ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]:
+            cal_html += f"""
+                <th style="padding:0.35rem; border-bottom:1px solid {BORDER_COLOR}; color:{MUTED_TEXT};">
+                    {wd}
+                </th>
+            """
+        cal_html += "</tr></thead><tbody>"
+
+        # Weeks
+        for week in cal.monthdayscalendar(year, month):
+            cal_html += "<tr>"
+            for day in week:
+                if day == 0:
+                    cal_html += '<td style="padding:0.4rem; height:2rem;"></td>'
+                else:
+                    if day in days_with_followups:
+                        cal_html += f"""
+                        <td style="
+                            padding:0.4rem;
+                            height:2rem;
+                            background-color: rgba(37,99,235,0.09);
+                            border-radius:0.35rem;
+                            border:1px solid {PRIMARY_COLOR};
+                            font-weight:600;
+                            color:{TEXT_COLOR};
+                        ">
+                            {day}
+                        </td>
+                        """
+                    else:
+                        cal_html += f"""
+                        <td style="
+                            padding:0.4rem;
+                            height:2rem;
+                            color:{TEXT_COLOR};
+                        ">
+                            {day}
+                        </td>
+                        """
+            cal_html += "</tr>"
+        cal_html += "</tbody></table></div>"
+
+        st.markdown(cal_html, unsafe_allow_html=True)
+
+        # Show follow-ups for the selected date
         todays_rows = df_dates[df_dates["next_follow_up_date"] == selected_date]
 
         st.markdown(
@@ -914,7 +987,6 @@ with tab_calendar:
         if todays_rows.empty:
             st.info("No follow-ups scheduled for this date.")
         else:
-            # Show table of follow-ups
             show_cols = [
                 "customer_name",
                 "company_name",
@@ -931,89 +1003,3 @@ with tab_calendar:
             st.markdown('<div class="crm-card">', unsafe_allow_html=True)
             st.dataframe(todays_rows[available_cols], use_container_width=True)
             st.markdown("</div>", unsafe_allow_html=True)
-
-            # Email reminders section
-            st.markdown("#### Send Reminder Emails (Yahoo)")
-
-            col_y1, col_y2 = st.columns(2)
-            with col_y1:
-                cal_yahoo_email = st.text_input(
-                    "Your Yahoo Email (From)", key="cal_yahoo_email"
-                )
-            with col_y2:
-                cal_yahoo_app_password = st.text_input(
-                    "Yahoo App Password",
-                    type="password",
-                    help="Use a Yahoo app password, not your main login password.",
-                    key="cal_yahoo_password",
-                )
-
-            # Choose which leads to remind
-            todays_rows["rem_label"] = (
-                todays_rows["customer_name"].fillna("")
-                + " | "
-                + todays_rows["company_name"].fillna("")
-                + " | "
-                + todays_rows["email"].fillna("")
-            )
-            selected_labels = st.multiselect(
-                "Select customers to send reminders to",
-                todays_rows["rem_label"].tolist(),
-                default=todays_rows["rem_label"].tolist(),
-            )
-
-            # Default reminder subject/body
-            reminder_subject = st.text_input(
-                "Reminder email subject",
-                value="Quick follow-up on your spray foam project",
-            )
-            base_body = (
-                "Just a quick reminder about your spray foam / roof coating project.\n\n"
-                "Let us know if you have any questions or if you're ready to move forward.\n\n"
-                "Best regards,\n"
-                "ECI Foam Systems"
-            )
-            reminder_body = st.text_area(
-                "Reminder email message (template used for each selected customer)",
-                value=base_body,
-                height=200,
-            )
-
-            if st.button("📨 Send Reminder Emails to Selected"):
-                if not (cal_yahoo_email and cal_yahoo_app_password):
-                    st.error("Please fill in your Yahoo email and app password.")
-                elif not selected_labels:
-                    st.error("Select at least one customer to send reminders to.")
-                else:
-                    errors = 0
-                    count = 0
-                    for lbl in selected_labels:
-                        row = todays_rows[todays_rows["rem_label"] == lbl].iloc[0]
-                        to_email = row.get("email", "").strip()
-                        name = row.get("customer_name", "").strip()
-
-                        if not to_email:
-                            continue
-
-                        if name:
-                            body = f"Hi {name},\n\n{reminder_body}"
-                        else:
-                            body = reminder_body
-
-                        try:
-                            send_yahoo_email(
-                                from_email=cal_yahoo_email,
-                                app_password=cal_yahoo_app_password,
-                                to_email=to_email,
-                                subject=reminder_subject,
-                                body=body,
-                            )
-                            count += 1
-                        except Exception as e:
-                            errors += 1
-                            st.error(f"Failed for {to_email}: {e}")
-
-                    st.success(
-                        f"Reminder emails sent: {count}. "
-                        + (f"Errors: {errors}." if errors else "")
-                    )
