@@ -1009,7 +1009,19 @@ with tab_calendar:
                         </td>
                         """
                     else:
-                        cal_html += f"""
+                       cal_html += f"""
+                        <td style="
+                            padding:0.4rem;
+                            height:2rem;
+                            background-color: rgba(37,99,235,0.09);
+                            border-radius:0.35rem;
+                            border:1px solid {PRIMARY_COLOR};
+                            font-weight:600;
+                            color:{TEXT_COLOR};
+                        ">
+                            {day}
+                        </td>
+"""
                         <td style="
                             padding:0.4rem;
                             height:2rem;
