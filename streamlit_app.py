@@ -3,19 +3,17 @@ import pandas as pd
 import os
 import uuid
 from datetime import date
-
-# ============================================================
-# SIMPLE LOGIN CONFIG
-# ============================================================
-# 👉 Change these to whatever you want
-APP_USERNAME = "eci"
-APP_PASSWORD = "foam123!"
+import hashlib
+import smtplib
+import ssl
+from email.message import EmailMessage
 
 # ============================================================
 # SETTINGS / CONFIG
 # ============================================================
 
 DATA_FILE = "sprayfoam_crm.csv"
+USERS_FILE = "users.csv"  # for login/sign-up accounts
 
 # Your logo (from ECI Foam Systems site / assets)
 LOGO_URL = "https://images.leadconnectorhq.com/image/f_webp/q_80/r_1200/u_https%3A//assets.cdn.filesafe.space/lkH7W8xbGl6pzt92LyGS/media/681428e788b94e7763044d2f.png"
@@ -31,7 +29,57 @@ BORDER_COLOR = "#e5e7eb"   # gray-200
 
 
 # ============================================================
-# DATA HELPERS
+# USER / AUTH HELPERS
+# ============================================================
+
+def hash_password(password: str) -> str:
+    """Return SHA256 hash of a password."""
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def load_users() -> pd.DataFrame:
+    """Load users from CSV or create empty."""
+    if not os.path.exists(USERS_FILE):
+        return pd.DataFrame(columns=["email", "password_hash"])
+    df = pd.read_csv(USERS_FILE)
+    if "email" not in df.columns or "password_hash" not in df.columns:
+        df = pd.DataFrame(columns=["email", "password_hash"])
+    return df
+
+
+def save_users(df: pd.DataFrame):
+    """Save users back to CSV."""
+    df.to_csv(USERS_FILE, index=False)
+
+
+def user_exists(email: str) -> bool:
+    df = load_users()
+    return not df[df["email"].str.lower() == email.lower()].empty
+
+
+def create_user(email: str, password: str):
+    df = load_users()
+    new_row = {
+        "email": email.strip(),
+        "password_hash": hash_password(password.strip()),
+    }
+    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    save_users(df)
+
+
+def verify_user(email: str, password: str) -> bool:
+    df = load_users()
+    if df.empty:
+        return False
+    row = df[df["email"].str.lower() == email.lower()]
+    if row.empty:
+        return False
+    stored_hash = row.iloc[0]["password_hash"]
+    return stored_hash == hash_password(password)
+
+
+# ============================================================
+# DATA HELPERS (CRM)
 # ============================================================
 
 def load_data():
@@ -74,6 +122,24 @@ def save_data(df: pd.DataFrame):
 def new_id():
     """Generate a unique ID for a new record."""
     return str(uuid.uuid4())
+
+
+# ============================================================
+# EMAIL / YAHOO MAIL SENDER
+# ============================================================
+
+def send_yahoo_email(from_email: str, app_password: str, to_email: str, subject: str, body: str):
+    """Send an email using Yahoo SMTP."""
+    msg = EmailMessage()
+    msg["From"] = from_email
+    msg["To"] = to_email
+    msg["Subject"] = subject
+    msg.set_content(body)
+
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL("smtp.mail.yahoo.com", 465, context=context) as server:
+        server.login(from_email, app_password)
+        server.send_message(msg)
 
 
 # ============================================================
@@ -150,14 +216,6 @@ st.markdown(
             letter-spacing: 0.12em;
             color: {MUTED_TEXT};
         }}
-        .stat-pill {{
-            font-size: 0.75rem;
-            padding: 0.1rem 0.5rem;
-            border-radius: 999px;
-            background: rgba(249,250,251,0.95);
-            border: 1px solid {BORDER_COLOR};
-            color: {MUTED_TEXT};
-        }}
         .dataframe td, .dataframe th {{
             font-size: 0.85rem;
         }}
@@ -166,44 +224,72 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-
 # ============================================================
-# SIMPLE LOGIN GATE
+# AUTH / LOGIN + SIGNUP
 # ============================================================
 
-def login_screen():
-    st.markdown("## 🔐 Login to ECI Foam Systems CRM")
+def auth_screen():
+    st.markdown("## 🔐 ECI Foam Systems CRM")
 
-    with st.form("login_form"):
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        submit = st.form_submit_button("Login")
+    tab_login, tab_signup = st.tabs(["Login", "Create Account"])
 
-    if submit:
-        if username == APP_USERNAME and password == APP_PASSWORD:
-            st.session_state["authenticated"] = True
-            st.success("Logged in successfully.")
-            st.experimental_rerun()
-        else:
-            st.error("Invalid username or password.")
+    # LOGIN TAB
+    with tab_login:
+        st.markdown("#### Login")
+        with st.form("login_form"):
+            login_email = st.text_input("Email")
+            login_password = st.text_input("Password", type="password")
+            submit_login = st.form_submit_button("Login")
 
-# Initialize auth flag
+        if submit_login:
+            if verify_user(login_email, login_password):
+                st.session_state["authenticated"] = True
+                st.session_state["user_email"] = login_email
+                st.success("Logged in successfully.")
+                st.experimental_rerun()
+            else:
+                st.error("Invalid email or password.")
+
+    # SIGNUP TAB
+    with tab_signup:
+        st.markdown("#### Create Account")
+        with st.form("signup_form"):
+            signup_email = st.text_input("Email (this will be your login)")
+            signup_password = st.text_input("Password", type="password")
+            signup_password2 = st.text_input("Confirm Password", type="password")
+            submit_signup = st.form_submit_button("Create Account")
+
+        if submit_signup:
+            if not signup_email or not signup_password:
+                st.error("Email and password are required.")
+            elif signup_password != signup_password2:
+                st.error("Passwords do not match.")
+            elif user_exists(signup_email):
+                st.error("An account with that email already exists.")
+            else:
+                create_user(signup_email, signup_password)
+                st.success("Account created. You can now log in on the Login tab.")
+
+
+# Init auth state
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
+if "user_email" not in st.session_state:
+    st.session_state["user_email"] = None
 
-# If not authenticated, show only login and stop
+# If not logged in, show auth screen
 if not st.session_state["authenticated"]:
-    login_screen()
+    auth_screen()
     st.stop()
 
-# Optional: logout button in sidebar
+# Logout option
 if st.sidebar.button("🚪 Logout"):
     st.session_state["authenticated"] = False
+    st.session_state["user_email"] = None
     st.experimental_rerun()
 
-
 # ============================================================
-# HEADER SECTION WITH LOGO (only visible after login)
+# HEADER (only after login)
 # ============================================================
 
 header_col1, header_col2 = st.columns([1, 3])
@@ -218,7 +304,7 @@ with header_col2:
             <div style="flex: 1;">
                 <div class="crm-header-text-main">ECI Foam Systems CRM</div>
                 <p class="crm-header-text-sub">
-                    Simple, elite tracking for spray foam roofing, roof coatings, and insulation jobs – 
+                    Track spray foam roofing, roof coatings, and insulation jobs – 
                     from first call to completed project.
                 </p>
                 <span class="crm-header-pill">
@@ -232,9 +318,8 @@ with header_col2:
 
 st.write("")  # spacer
 
-
 # ============================================================
-# LOAD DATA
+# LOAD CRM DATA
 # ============================================================
 
 df = load_data()
@@ -297,7 +382,6 @@ with stat4:
 
 st.write("")  # spacer
 
-
 # ============================================================
 # SIDEBAR FILTERS
 # ============================================================
@@ -336,13 +420,12 @@ if search_text.strip():
     )
     filtered = filtered[mask]
 
-
 # ============================================================
-# TABS (VIEW / ADD / EDIT)
+# TABS (VIEW / ADD / EDIT / EMAIL)
 # ============================================================
 
-tab_view, tab_add, tab_edit = st.tabs(
-    ["📋 Customers & Leads", "➕ Add Customer / Lead", "✏️ Edit Customer / Lead"]
+tab_view, tab_add, tab_edit, tab_email = st.tabs(
+    ["📋 Customers & Leads", "➕ Add Customer / Lead", "✏️ Edit Customer / Lead", "📧 Email Client"]
 )
 
 # ------------------------------------------------------------
@@ -379,7 +462,6 @@ with tab_view:
         file_name="sprayfoam_crm_filtered.csv",
         mime="text/csv",
     )
-
 
 # ------------------------------------------------------------
 # TAB 2: ADD CUSTOMER / LEAD
@@ -489,7 +571,6 @@ with tab_add:
             st.success("Customer / lead saved.")
             st.experimental_rerun()
 
-
 # ------------------------------------------------------------
 # TAB 3: EDIT CUSTOMER / LEAD
 # ------------------------------------------------------------
@@ -500,7 +581,6 @@ with tab_edit:
     if df.empty:
         st.info("No records to edit yet. Add some first.")
     else:
-        # Create a label to make it easy to find the right record
         df["label"] = (
             df["customer_name"].fillna("")
             + " | "
@@ -694,3 +774,77 @@ with tab_edit:
             save_data(df)
             st.success("Customer / lead deleted.")
             st.experimental_rerun()
+
+# ------------------------------------------------------------
+# TAB 4: EMAIL CLIENT (YAHOO)
+# ------------------------------------------------------------
+
+with tab_email:
+    st.subheader("Email Client (Yahoo)")
+
+    st.markdown(
+        "Use your **Yahoo email + app password** to email customers directly from the CRM."
+    )
+    st.markdown(
+        "*Tip: In Yahoo account security, create an **app password** for SMTP and use it here.*"
+    )
+
+    col_left, col_right = st.columns(2)
+
+    with col_left:
+        yahoo_email = st.text_input("Your Yahoo Email (From)")
+        yahoo_app_password = st.text_input(
+            "Yahoo App Password", type="password", help="Use a Yahoo app password, not your main login password."
+        )
+
+        if df.empty:
+            st.info("No customers in CRM yet to email.")
+            selected_email = ""
+            selected_name = ""
+        else:
+            df["label_email"] = (
+                df["customer_name"].fillna("")
+                + " | "
+                + df["company_name"].fillna("")
+                + " | "
+                + df["email"].fillna("")
+            )
+            selected_label_email = st.selectbox(
+                "Select customer to email", df["label_email"].tolist()
+            )
+            row_email = df[df["label_email"] == selected_label_email].iloc[0]
+            selected_email = row_email.get("email", "")
+            selected_name = row_email.get("customer_name", "")
+
+    with col_right:
+        to_email = st.text_input("To", value=selected_email if df is not None else "")
+        default_subject = "Regarding your spray foam roofing / coating project"
+        subject = st.text_input("Subject", value=default_subject)
+
+        default_body = ""
+        if selected_name:
+            default_body = f"Hi {selected_name},\n\n"
+        default_body += (
+            "Just following up about your spray foam / roof coating project.\n\n"
+            "Let me know a good time to connect or if you have any questions.\n\n"
+            "Best regards,\n"
+            "ECI Foam Systems"
+        )
+
+        body = st.text_area("Message", value=default_body, height=220)
+
+    if st.button("📧 Send Email"):
+        if not (yahoo_email and yahoo_app_password and to_email and subject and body):
+            st.error("All fields (From, app password, To, subject, message) are required.")
+        else:
+            try:
+                send_yahoo_email(
+                    from_email=yahoo_email,
+                    app_password=yahoo_app_password,
+                    to_email=to_email,
+                    subject=subject,
+                    body=body,
+                )
+                st.success("Email sent successfully.")
+            except Exception as e:
+                st.error(f"Failed to send email: {e}")
