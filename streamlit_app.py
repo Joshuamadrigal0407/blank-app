@@ -1008,7 +1008,7 @@ with tab_calendar:
                         </td>
                         """
                     else:
-                        cal_html += f"""
+                        cal_html += f""";
                         <td style="
                             padding:0.4rem;
                             height:2rem;
