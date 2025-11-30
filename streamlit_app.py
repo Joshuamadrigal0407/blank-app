@@ -18,16 +18,16 @@ USERS_FILE = "users.csv"  # for login/sign-up accounts
 # Your logo (from ECI Foam Systems site / assets)
 LOGO_URL = "https://images.leadconnectorhq.com/image/f_webp/q_80/r_1200/u_https%3A//assets.cdn.filesafe.space/lkH7W8xbGl6pzt92LyGS/media/681428e788b94e7763044d2f.png"
 
-# Futuristic / neon-ish colors
-PRIMARY_COLOR = "#22d3ee"  # cyan / neon accent
-ACCENT_COLOR = "#a855f7"   # purple accent
-DARK_BG = "#020617"        # dark background
-GRADIENT_1 = "#0f172a"
-GRADIENT_2 = "#020617"
-CARD_BG = "rgba(15,23,42,0.9)"
-TEXT_COLOR = "#e5e7eb"
-MUTED_TEXT = "#9ca3af"
-BORDER_COLOR = "rgba(148,163,184,0.5)"
+# Brighter, high-contrast colors
+PRIMARY_COLOR = "#2563eb"   # blue
+ACCENT_COLOR = "#f97316"    # orange
+APP_BG = "#f3f4f6"          # light gray background
+CARD_BG = "#ffffff"         # white cards
+TEXT_COLOR = "#111827"      # near-black
+MUTED_TEXT = "#6b7280"      # gray-500
+BORDER_COLOR = "#e5e7eb"    # gray-200
+HEADER_GRADIENT_LEFT = "#1f2933"
+HEADER_GRADIENT_RIGHT = "#111827"
 
 
 # ============================================================
@@ -154,12 +154,12 @@ st.set_page_config(
     layout="wide",
 )
 
-# Global styling: futuristic gradient + glass cards
+# Global styling: bright, clear, easy to read
 st.markdown(
     f"""
     <style>
         .stApp {{
-            background: radial-gradient(circle at top left, {GRADIENT_1} 0, {GRADIENT_2} 45%, #000000 100%);
+            background-color: {APP_BG};
             color: {TEXT_COLOR};
         }}
         .block-container {{
@@ -169,17 +169,17 @@ st.markdown(
         }}
         h1, h2, h3, h4 {{
             color: {TEXT_COLOR};
-            letter-spacing: 0.04em;
+            letter-spacing: 0.03em;
         }}
         .crm-header {{
-            background: linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,64,175,0.95));
+            background: linear-gradient(135deg, {HEADER_GRADIENT_LEFT}, {HEADER_GRADIENT_RIGHT});
             border-radius: 1.1rem;
             padding: 1.25rem 1.5rem;
             display: flex;
             align-items: center;
             gap: 1.25rem;
-            box-shadow: 0 18px 45px rgba(15,23,42,0.85);
-            border: 1px solid {BORDER_COLOR};
+            box-shadow: 0 12px 30px rgba(15,23,42,0.5);
+            border: 1px solid rgba(148,163,184,0.4);
         }}
         .crm-header-text-main {{
             font-size: 1.6rem;
@@ -199,21 +199,20 @@ st.markdown(
             color: #e5e7eb;
             padding: 0.25rem 0.7rem;
             border-radius: 999px;
-            border: 1px solid rgba(248,250,252,0.4);
-            background: linear-gradient(90deg, rgba(34,211,238,0.15), rgba(168,85,247,0.15));
+            border: 1px solid rgba(248,250,252,0.6);
+            background: rgba(37,99,235,0.2);
         }}
         .crm-card {{
             background: {CARD_BG};
             border-radius: 0.9rem;
             padding: 1rem 1.25rem;
             border: 1px solid {BORDER_COLOR};
-            box-shadow: 0 14px 34px rgba(15,23,42,0.8);
-            backdrop-filter: blur(14px);
+            box-shadow: 0 8px 22px rgba(148,163,184,0.35);
         }}
         .stat-number {{
             font-size: 1.6rem;
             font-weight: 700;
-            color: #f9fafb;
+            color: {TEXT_COLOR};
         }}
         .stat-label {{
             font-size: 0.8rem;
@@ -223,14 +222,14 @@ st.markdown(
         }}
         .dataframe td, .dataframe th {{
             font-size: 0.85rem;
+            color: {TEXT_COLOR};
         }}
-        /* center auth box a bit */
         .auth-card {{
             background: {CARD_BG};
             border-radius: 1rem;
             padding: 1.5rem 1.75rem;
             border: 1px solid {BORDER_COLOR};
-            box-shadow: 0 18px 40px rgba(15,23,42,0.85);
+            box-shadow: 0 10px 25px rgba(148,163,184,0.5);
         }}
     </style>
     """,
@@ -247,10 +246,10 @@ def auth_screen():
         st.image(LOGO_URL, use_column_width=True)
 
     st.markdown(
-        """
+        f"""
         <div style="margin-top: 0.5rem; margin-bottom: 1rem;">
-            <h2 style="margin-bottom: 0.25rem;">ECI Foam Systems CRM</h2>
-            <p style="color:#cbd5f5; font-size:0.9rem; margin:0;">
+            <h2 style="margin-bottom: 0.25rem; color:{TEXT_COLOR};">ECI Foam Systems CRM</h2>
+            <p style="color:{MUTED_TEXT}; font-size:0.9rem; margin:0;">
                 Secure login • Customer management • Calendar & reminders • Built-in email
             </p>
         </div>
@@ -996,7 +995,6 @@ with tab_calendar:
                         if not to_email:
                             continue
 
-                        # Personalize greeting a bit
                         if name:
                             body = f"Hi {name},\n\n{reminder_body}"
                         else:
