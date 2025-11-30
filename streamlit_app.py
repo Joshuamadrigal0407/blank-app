@@ -1,180 +1,300 @@
 import streamlit as st
 import pandas as pd
+import os
+import uuid
+from datetime import date
 
-st.set_page_config(page_title="Mini PropertyRadar - Owner Lookup", layout="wide")
+DATA_FILE = "crm_data.csv"
 
-st.title("🏠 Mini PropertyRadar – Property Owner Lookup")
-st.write(
-    "Upload a CSV of properties (from PropertyRadar, county data, or your own list) "
-    "and filter/search to get owner names, addresses, and emails."
+# -----------------------------
+# Helpers to load/save data
+# -----------------------------
+def load_data():
+    if not os.path.exists(DATA_FILE):
+        cols = [
+            "id",
+            "owner_name",
+            "business_name",
+            "property_address",
+            "city",
+            "state",
+            "zip_code",
+            "email",
+            "phone",
+            "status",
+            "source",
+            "next_follow_up",
+            "notes",
+        ]
+        return pd.DataFrame(columns=cols)
+    df = pd.read_csv(DATA_FILE)
+    # make sure id column exists
+    if "id" not in df.columns:
+        df["id"] = [str(uuid.uuid4()) for _ in range(len(df))]
+    return df
+
+
+def save_data(df: pd.DataFrame):
+    df.to_csv(DATA_FILE, index=False)
+
+
+def generate_id():
+    return str(uuid.uuid4())
+
+
+# -----------------------------
+# Streamlit UI
+# -----------------------------
+st.set_page_config(page_title="Simple CRM", layout="wide")
+
+st.title("📇 Simple CRM for Property & Owner Leads")
+
+st.caption(
+    "Add, view, filter, and update your commercial/industrial property leads. "
+    "Data is stored locally in `crm_data.csv` in this folder."
 )
 
-st.markdown("""
-**Expected columns (or similar):**
-- owner_name / owner / owner_full_name  
-- owner_mailing_address / mailing_address  
-- property_address / situs_address / address  
-- city  
-- county  
-- property_type / land_use  
-- owner_email / email  
-""")
+df = load_data()
 
-uploaded_file = st.file_uploader("📥 Upload your property CSV", type=["csv"])
+# Sidebar filters
+st.sidebar.header("🔍 Filters")
 
+status_options = ["All"] + sorted([s for s in df["status"].dropna().unique()])
+status_filter = st.sidebar.selectbox("Status", status_options)
 
-def pick_column(possible_names, columns_lower_to_original):
-    """
-    Try to find the best matching column from a list of possible names.
-    Returns the original column name or None.
-    """
-    for name in possible_names:
-        if name in columns_lower_to_original:
-            return columns_lower_to_original[name]
-    return None
+city_options = ["All"] + sorted([c for c in df["city"].dropna().unique()])
+city_filter = st.sidebar.selectbox("City", city_options)
 
+search_text = st.sidebar.text_input("Search owner / business / address", "")
 
-if uploaded_file is not None:
-    try:
-        df = pd.read_csv(uploaded_file)
-    except Exception:
-        st.error("Could not read CSV. Make sure it's a standard comma-separated file.")
-        st.stop()
+# Apply filters
+filtered_df = df.copy()
 
-    st.success(f"Loaded {len(df)} rows from CSV.")
+if status_filter != "All":
+    filtered_df = filtered_df[filtered_df["status"] == status_filter]
 
-    # Map lowercase column names to original names
-    cols_lower_map = {c.lower().strip(): c for c in df.columns}
+if city_filter != "All":
+    filtered_df = filtered_df[filtered_df["city"] == city_filter]
 
-    # Try to detect key columns
-    owner_col = pick_column(
-        ["owner_name", "owner", "owner full name", "owner_full_name"],
-        cols_lower_map,
+if search_text.strip():
+    q = search_text.strip().lower()
+    mask = (
+        filtered_df["owner_name"].fillna("").str.lower().str.contains(q)
+        | filtered_df["business_name"].fillna("").str.lower().str.contains(q)
+        | filtered_df["property_address"].fillna("").str.lower().str.contains(q)
     )
-    owner_mail_col = pick_column(
-        ["owner_mailing_address", "mailing_address", "mailing address"],
-        cols_lower_map,
-    )
-    prop_addr_col = pick_column(
-        ["property_address", "situs_address", "address", "site_address"],
-        cols_lower_map,
-    )
-    city_col = pick_column(["city", "prop_city", "property_city"], cols_lower_map)
-    county_col = pick_column(["county", "prop_county"], cols_lower_map)
-    prop_type_col = pick_column(
-        ["property_type", "land_use", "use_code", "prop_type"],
-        cols_lower_map,
-    )
-    email_col = pick_column(["owner_email", "email", "contact_email"], cols_lower_map)
+    filtered_df = filtered_df[mask]
 
-    # Show what we found
-    st.subheader("🔍 Column Detection")
-    st.write("**Owner name column:**", owner_col or "❌ Not found")
-    st.write("**Owner mailing address column:**", owner_mail_col or "❌ Not found")
-    st.write("**Property address column:**", prop_addr_col or "❌ Not found")
-    st.write("**City column:**", city_col or "❌ Not found")
-    st.write("**County column:**", county_col or "❌ Not found")
-    st.write("**Property type / land use column:**", prop_type_col or "❌ Not found")
-    st.write("**Owner email column:**", email_col or "❌ Not found")
+# Tabs: View / Add / Edit
+tab_view, tab_add, tab_edit = st.tabs(["📋 View Leads", "➕ Add Lead", "✏️ Edit Lead"])
 
-    st.info(
-        "If any important column says ❌ Not found, rename your column in Excel to something like "
-        "`owner_name`, `property_address`, `owner_email`, then re-upload."
-    )
+# -----------------------------
+# View tab
+# -----------------------------
+with tab_view:
+    st.subheader(f"Leads ({len(filtered_df)})")
 
-    # Sidebar filters
-    st.sidebar.header("🔎 Filters")
+    display_cols = [
+        "owner_name",
+        "business_name",
+        "property_address",
+        "city",
+        "state",
+        "zip_code",
+        "email",
+        "phone",
+        "status",
+        "next_follow_up",
+        "source",
+    ]
 
-    mask = pd.Series(True, index=df.index)
+    existing_cols = [c for c in display_cols if c in filtered_df.columns]
 
-    # Filter by county
-    if county_col is not None:
-        counties = sorted(df[county_col].dropna().astype(str).unique())
-        selected_counties = st.sidebar.multiselect(
-            "County", counties, default=counties
-        )
-        mask &= df[county_col].astype(str).isin(selected_counties)
+    st.dataframe(filtered_df[existing_cols], use_container_width=True)
 
-    # Filter by city
-    if city_col is not None:
-        cities = sorted(df[city_col].dropna().astype(str).unique())
-        selected_cities = st.sidebar.multiselect(
-            "City", cities, default=cities
-        )
-        mask &= df[city_col].astype(str).isin(selected_cities)
-
-    # Filter by property type
-    if prop_type_col is not None:
-        prop_types = sorted(df[prop_type_col].dropna().astype(str).unique())
-        selected_types = st.sidebar.multiselect(
-            "Property Type / Land Use", prop_types, default=prop_types
-        )
-        mask &= df[prop_type_col].astype(str).isin(selected_types)
-
-    # Simple text search (owner or address)
-    text_query = st.sidebar.text_input(
-        "Search (owner or address contains):", ""
-    ).strip()
-
-    def contains_text(series, query):
-        return series.astype(str).str.contains(query, case=False, na=False)
-
-    if text_query:
-        text_mask = pd.Series(False, index=df.index)
-        if owner_col is not None:
-            text_mask |= contains_text(df[owner_col], text_query)
-        if prop_addr_col is not None:
-            text_mask |= contains_text(df[prop_addr_col], text_query)
-        mask &= text_mask
-
-    # Apply mask
-    filtered = df[mask].copy()
-
-    st.subheader(f"📋 Filtered Properties ({len(filtered)} rows)")
-
-    # Build a nice simplified table for display
-    display_cols = []
-    label_map = {}
-
-    if owner_col is not None:
-        display_cols.append(owner_col)
-        label_map[owner_col] = "Owner Name"
-    if owner_mail_col is not None:
-        display_cols.append(owner_mail_col)
-        label_map[owner_mail_col] = "Owner Mailing Address"
-    if prop_addr_col is not None:
-        display_cols.append(prop_addr_col)
-        label_map[prop_addr_col] = "Property Address"
-    if city_col is not None:
-        display_cols.append(city_col)
-        label_map[city_col] = "City"
-    if county_col is not None:
-        display_cols.append(county_col)
-        label_map[county_col] = "County"
-    if prop_type_col is not None:
-        display_cols.append(prop_type_col)
-        label_map[prop_type_col] = "Property Type / Land Use"
-    if email_col is not None:
-        display_cols.append(email_col)
-        label_map[email_col] = "Owner Email"
-
-    if display_cols:
-        to_show = filtered[display_cols].rename(columns=label_map)
-    else:
-        st.warning("No core columns detected; showing raw data.")
-        to_show = filtered
-
-    st.dataframe(to_show, use_container_width=True)
-
-    # Download filtered results
-    st.subheader("📥 Download Filtered List")
-    csv_bytes = filtered.to_csv(index=False).encode("utf-8")
     st.download_button(
-        label="Download as CSV",
-        data=csv_bytes,
-        file_name="filtered_property_owners.csv",
+        label="📥 Download filtered as CSV",
+        data=filtered_df.to_csv(index=False),
+        file_name="crm_filtered_export.csv",
         mime="text/csv",
     )
-else:
-    st.info("Upload a CSV to get started.")
 
+# -----------------------------
+# Add tab
+# -----------------------------
+with tab_add:
+    st.subheader("Add New Lead")
+
+    with st.form("add_lead_form"):
+        col1, col2 = st.columns(2)
+
+        with col1:
+            owner_name = st.text_input("Owner Name")
+            business_name = st.text_input("Business Name (optional)")
+            property_address = st.text_input("Property Address")
+            city = st.text_input("City")
+            state_val = st.text_input("State", value="CA")
+            zip_code = st.text_input("ZIP Code")
+
+        with col2:
+            email = st.text_input("Email")
+            phone = st.text_input("Phone")
+            status = st.selectbox(
+                "Status",
+                ["New", "Contacted", "Quoted", "Follow-up", "Closed Won", "Closed Lost"],
+            )
+            source = st.text_input("Source (e.g. PRadar, Open Data, Referral)")
+            next_follow_up = st.date_input(
+                "Next follow-up date",
+                value=date.today(),
+            )
+
+        notes = st.text_area("Notes")
+
+        submitted = st.form_submit_button("Save Lead")
+
+    if submitted:
+        if not owner_name and not business_name:
+            st.error("Please enter at least an owner name or business name.")
+        else:
+            new_row = {
+                "id": generate_id(),
+                "owner_name": owner_name,
+                "business_name": business_name,
+                "property_address": property_address,
+                "city": city,
+                "state": state_val,
+                "zip_code": zip_code,
+                "email": email,
+                "phone": phone,
+                "status": status,
+                "source": source,
+                "next_follow_up": str(next_follow_up),
+                "notes": notes,
+            }
+            df = df.append(new_row, ignore_index=True)
+            save_data(df)
+            st.success("Lead saved.")
+            st.experimental_rerun()
+
+# -----------------------------
+# Edit tab
+# -----------------------------
+with tab_edit:
+    st.subheader("Edit Existing Lead")
+
+    if df.empty:
+        st.info("No leads to edit yet. Add some first.")
+    else:
+        # Show a selector by owner/business + address
+        df["display_label"] = (
+            df["owner_name"].fillna("")
+            + " | "
+            + df["business_name"].fillna("")
+            + " | "
+            + df["property_address"].fillna("")
+        )
+
+        selected_label = st.selectbox(
+            "Select a lead to edit",
+            df["display_label"].tolist(),
+        )
+
+        selected_row = df[df["display_label"] == selected_label].iloc[0]
+        selected_index = df[df["display_label"] == selected_label].index[0]
+
+        with st.form("edit_lead_form"):
+            col1, col2 = st.columns(2)
+
+            with col1:
+                owner_name_e = st.text_input(
+                    "Owner Name", value=selected_row.get("owner_name", "")
+                )
+                business_name_e = st.text_input(
+                    "Business Name", value=selected_row.get("business_name", "")
+                )
+                property_address_e = st.text_input(
+                    "Property Address", value=selected_row.get("property_address", "")
+                )
+                city_e = st.text_input("City", value=selected_row.get("city", ""))
+                state_e = st.text_input("State", value=selected_row.get("state", "CA"))
+                zip_code_e = st.text_input(
+                    "ZIP Code", value=selected_row.get("zip_code", "")
+                )
+
+            with col2:
+                email_e = st.text_input("Email", value=selected_row.get("email", ""))
+                phone_e = st.text_input("Phone", value=selected_row.get("phone", ""))
+                status_e = st.selectbox(
+                    "Status",
+                    [
+                        "New",
+                        "Contacted",
+                        "Quoted",
+                        "Follow-up",
+                        "Closed Won",
+                        "Closed Lost",
+                    ],
+                    index=[
+                        "New",
+                        "Contacted",
+                        "Quoted",
+                        "Follow-up",
+                        "Closed Won",
+                        "Closed Lost",
+                    ].index(selected_row.get("status", "New"))
+                    if selected_row.get("status", "New") in [
+                        "New",
+                        "Contacted",
+                        "Quoted",
+                        "Follow-up",
+                        "Closed Won",
+                        "Closed Lost",
+                    ]
+                    else 0,
+                )
+                source_e = st.text_input(
+                    "Source", value=selected_row.get("source", "")
+                )
+                next_follow_up_e = st.date_input(
+                    "Next follow-up date",
+                    value=pd.to_datetime(
+                        selected_row.get("next_follow_up", date.today())
+                    ).date(),
+                )
+
+            notes_e = st.text_area("Notes", value=selected_row.get("notes", ""))
+
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                update_btn = st.form_submit_button("💾 Update Lead")
+            with col_btn2:
+                delete_btn = st.form_submit_button("🗑️ Delete Lead")
+
+        if update_btn:
+            df.at[selected_index, "owner_name"] = owner_name_e
+            df.at[selected_index, "business_name"] = business_name_e
+            df.at[selected_index, "property_address"] = property_address_e
+            df.at[selected_index, "city"] = city_e
+            df.at[selected_index, "state"] = state_e
+            df.at[selected_index, "zip_code"] = zip_code_e
+            df.at[selected_index, "email"] = email_e
+            df.at[selected_index, "phone"] = phone_e
+            df.at[selected_index, "status"] = status_e
+            df.at[selected_index, "source"] = source_e
+            df.at[selected_index, "next_follow_up"] = str(next_follow_up_e)
+            df.at[selected_index, "notes"] = notes_e
+
+            # Drop helper column
+            df = df.drop(columns=["display_label"], errors="ignore")
+            save_data(df)
+            st.success("Lead updated.")
+            st.experimental_rerun()
+
+        if delete_btn:
+            df = df.drop(index=selected_index)
+            df = df.drop(columns=["display_label"], errors="ignore")
+            df.reset_index(drop=True, inplace=True)
+            save_data(df)
+            st.success("Lead deleted.")
+            st.experimental_rerun()
