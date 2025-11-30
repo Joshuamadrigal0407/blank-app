@@ -19,17 +19,17 @@ USERS_FILE = "users.csv"  # for login/sign-up accounts
 # Your logo (from ECI Foam Systems site / assets)
 LOGO_URL = "https://images.leadconnectorhq.com/image/f_webp/q_80/r_1200/u_https%3A//assets.cdn.filesafe.space/lkH7W8xbGl6pzt92LyGS/media/681428e788b94e7763044d2f.png"
 
-# Brighter, high-contrast colors
-PRIMARY_COLOR = "#2563eb"   # blue
+# Brand / UI colors (bright, high contrast, “elite”)
+PRIMARY_COLOR = "#1d4ed8"   # strong blue
 ACCENT_COLOR = "#f97316"    # orange
-APP_BG = "#f3f4f6"          # light gray background
-CARD_BG = "#ffffff"         # white cards
-TEXT_COLOR = "#111827"      # near-black
-MUTED_TEXT = "#6b7280"      # gray-500
-BORDER_COLOR = "#e5e7eb"    # gray-200
-HEADER_GRADIENT_LEFT = "#1f2933"
-HEADER_GRADIENT_RIGHT = "#111827"
-
+APP_BG = "#0b1120"          # dark navy background
+CARD_BG = "#020617"         # very dark card bg
+CARD_ELEVATED = "#020617"
+TEXT_COLOR = "#f9fafb"      # near-white
+MUTED_TEXT = "#9ca3af"      # gray-400
+BORDER_COLOR = "#1f2937"    # gray-800
+HEADER_GRADIENT_LEFT = "#111827"
+HEADER_GRADIENT_RIGHT = "#020617"
 
 # ============================================================
 # USER / AUTH HELPERS
@@ -37,7 +37,8 @@ HEADER_GRADIENT_RIGHT = "#111827"
 
 def hash_password(password: str) -> str:
     """Return SHA256 hash of a password."""
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+    import hashlib as _hashlib
+    return _hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 
 def load_users() -> pd.DataFrame:
@@ -57,6 +58,8 @@ def save_users(df: pd.DataFrame):
 
 def user_exists(email: str) -> bool:
     df = load_users()
+    if df.empty:
+        return False
     return not df[df["email"].str.lower() == email.lower()].empty
 
 
@@ -155,12 +158,12 @@ st.set_page_config(
     layout="wide",
 )
 
-# Global styling: bright, clear, easy to read
+# Global styling / theming
 st.markdown(
     f"""
     <style>
         .stApp {{
-            background-color: {APP_BG};
+            background: radial-gradient(circle at top left, #1e293b 0, {APP_BG} 45%, #020617 100%);
             color: {TEXT_COLOR};
         }}
         .block-container {{
@@ -172,53 +175,73 @@ st.markdown(
             color: {TEXT_COLOR};
             letter-spacing: 0.03em;
         }}
+        /* HEADER CARD */
         .crm-header {{
             background: linear-gradient(135deg, {HEADER_GRADIENT_LEFT}, {HEADER_GRADIENT_RIGHT});
             border-radius: 1.1rem;
-            padding: 1.25rem 1.5rem;
+            padding: 1.4rem 1.6rem;
             display: flex;
             align-items: center;
             gap: 1.25rem;
-            box-shadow: 0 12px 30px rgba(15,23,42,0.5);
-            border: 1px solid rgba(148,163,184,0.4);
+            box-shadow: 0 18px 40px rgba(15,23,42,0.7);
+            border: 1px solid rgba(148,163,184,0.35);
+            position: relative;
+            overflow: hidden;
+        }}
+        .crm-header::after {{
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at top right, rgba(37,99,235,0.32), transparent 60%);
+            opacity: 0.9;
+            pointer-events: none;
         }}
         .crm-header-text-main {{
-            font-size: 1.6rem;
-            font-weight: 750;
+            font-size: 1.7rem;
+            font-weight: 780;
             color: #f9fafb;
-            margin-bottom: 0.2rem;
+            margin-bottom: 0.15rem;
         }}
         .crm-header-text-sub {{
-            font-size: 0.9rem;
+            font-size: 0.92rem;
             color: #e5e7eb;
             margin: 0;
         }}
         .crm-header-pill {{
-            display: inline-block;
-            margin-top: 0.4rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            margin-top: 0.55rem;
             font-size: 0.75rem;
             color: #e5e7eb;
-            padding: 0.25rem 0.7rem;
+            padding: 0.27rem 0.8rem;
             border-radius: 999px;
-            border: 1px solid rgba(248,250,252,0.6);
-            background: rgba(37,99,235,0.2);
+            border: 1px solid rgba(248,250,252,0.5);
+            background: linear-gradient(135deg, rgba(37,99,235,0.55), rgba(249,115,22,0.55));
+            backdrop-filter: blur(8px);
+        }}
+        .crm-header-pill span.icon {{
+            font-size: 0.95rem;
         }}
         .crm-card {{
-            background: {CARD_BG};
+            background: linear-gradient(135deg, rgba(15,23,42,0.95), rgba(15,23,42,0.9));
             border-radius: 0.9rem;
             padding: 1rem 1.25rem;
-            border: 1px solid {BORDER_COLOR};
-            box-shadow: 0 8px 22px rgba(148,163,184,0.35);
+            border: 1px solid rgba(55,65,81,0.9);
+            box-shadow: 0 14px 35px rgba(15,23,42,0.8);
+        }}
+        .crm-card.soft {{
+            background: {CARD_BG};
         }}
         .stat-number {{
             font-size: 1.6rem;
-            font-weight: 700;
+            font-weight: 750;
             color: {TEXT_COLOR};
         }}
         .stat-label {{
-            font-size: 0.8rem;
+            font-size: 0.76rem;
             text-transform: uppercase;
-            letter-spacing: 0.12em;
+            letter-spacing: 0.14em;
             color: {MUTED_TEXT};
         }}
         .dataframe td, .dataframe th {{
@@ -226,11 +249,52 @@ st.markdown(
             color: {TEXT_COLOR};
         }}
         .auth-card {{
-            background: {CARD_BG};
+            background: linear-gradient(145deg, #020617, #020617);
             border-radius: 1rem;
             padding: 1.5rem 1.75rem;
-            border: 1px solid {BORDER_COLOR};
-            box-shadow: 0 10px 25px rgba(148,163,184,0.5);
+            border: 1px solid rgba(75,85,99,0.9);
+            box-shadow: 0 18px 40px rgba(15,23,42,0.95);
+        }}
+        /* Sidebar styling */
+        section[data-testid="stSidebar"] {{
+            background: radial-gradient(circle at top, #020617, #020617 45%, #020617 100%);
+            border-right: 1px solid rgba(31,41,55,0.9);
+        }}
+        section[data-testid="stSidebar"] h1, 
+        section[data-testid="stSidebar"] h2, 
+        section[data-testid="stSidebar"] h3 {{
+            color: {TEXT_COLOR};
+        }}
+        /* Buttons */
+        div.stButton > button, .stDownloadButton > button {{
+            background: linear-gradient(135deg, {PRIMARY_COLOR}, {ACCENT_COLOR});
+            color: #f9fafb;
+            border-radius: 999px;
+            border: none;
+            padding: 0.35rem 0.9rem;
+            font-weight: 600;
+            box-shadow: 0 8px 22px rgba(37,99,235,0.6);
+        }}
+        div.stButton > button:hover, .stDownloadButton > button:hover {{
+            filter: brightness(1.05);
+            box-shadow: 0 12px 25px rgba(37,99,235,0.9);
+        }}
+        /* Tabs */
+        button[data-baseweb="tab"] {{
+            font-weight: 500;
+            border-radius: 999px !important;
+            padding: 0.35rem 0.9rem;
+        }}
+        button[data-baseweb="tab"][aria-selected="true"] {{
+            background: linear-gradient(135deg, {PRIMARY_COLOR}, {ACCENT_COLOR});
+            color: #f9fafb !important;
+        }}
+        /* Inputs */
+        .stTextInput > label, .stDateInput > label, .stSelectbox > label, .stTextArea > label {{
+            color: {MUTED_TEXT};
+            font-size: 0.83rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
         }}
     </style>
     """,
@@ -242,21 +306,27 @@ st.markdown(
 # ============================================================
 
 def auth_screen():
-    logo_col, _ = st.columns([1, 3])
+    logo_col, text_col = st.columns([1, 2])
     with logo_col:
         st.image(LOGO_URL, use_column_width=True)
 
-    st.markdown(
-        f"""
-        <div style="margin-top: 0.5rem; margin-bottom: 1rem;">
-            <h2 style="margin-bottom: 0.25rem; color:{TEXT_COLOR};">ECI Foam Systems CRM</h2>
-            <p style="color:{MUTED_TEXT}; font-size:0.9rem; margin:0;">
-                Secure login • Customer management • Calendar & reminders • Built-in email
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    with text_col:
+        st.markdown(
+            f"""
+            <div style="margin-top: 0.25rem; margin-bottom: 1rem;">
+                <h2 style="margin-bottom: 0.25rem; color:{TEXT_COLOR};">
+                    ECI Foam Systems CRM
+                </h2>
+                <p style="color:{MUTED_TEXT}; font-size:0.92rem; margin:0 0 0.15rem 0;">
+                    Lead & customer management built for Spray Foam Roofing and Coating projects.
+                </p>
+                <p style="color:{MUTED_TEXT}; font-size:0.8rem; margin:0;">
+                    Serving the Central Valley & Bay Area • Leaders in Spray Foam Solutions Since 1975
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     st.markdown('<div class="auth-card">', unsafe_allow_html=True)
     tab_login, tab_signup = st.tabs(["Login", "Create Account"])
@@ -311,7 +381,29 @@ if not st.session_state["authenticated"]:
     auth_screen()
     st.stop()
 
-# Logout option
+# ============================================================
+# SIDEBAR (shown only when logged in)
+# ============================================================
+
+st.sidebar.image(LOGO_URL, use_column_width=True)
+st.sidebar.markdown(
+    f"""
+    <div style="margin-bottom:0.75rem;">
+        <p style="color:{TEXT_COLOR}; font-weight:600; font-size:0.9rem; margin-bottom:0.15rem;">
+            ECI Foam Systems CRM
+        </p>
+        <p style="color:{MUTED_TEXT}; font-size:0.8rem; margin:0;">
+            Logged in as:<br><strong>{st.session_state["user_email"]}</strong>
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.sidebar.markdown("---")
+st.sidebar.header("🔎 Filters")
+
+# Logout
 if st.sidebar.button("🚪 Logout"):
     st.session_state["authenticated"] = False
     st.session_state["user_email"] = None
@@ -330,14 +422,16 @@ with header_col2:
     st.markdown(
         f"""
         <div class="crm-header">
-            <div style="flex: 1;">
+            <div style="flex: 1; position:relative; z-index:1;">
                 <div class="crm-header-text-main">ECI Foam Systems CRM</div>
                 <p class="crm-header-text-sub">
                     Track spray foam roofing, roof coatings, and insulation jobs – 
                     from first call to completed project.
                 </p>
                 <span class="crm-header-pill">
-                    Central & Northern California • Commercial & Industrial Roofing
+                    <span class="icon">📍</span> Central Valley & Bay Area, CA
+                    <span style="margin-left:0.6rem;">|</span>
+                    <span class="icon">📞</span> (559) 645-4007
                 </span>
             </div>
         </div>
@@ -371,6 +465,13 @@ open_statuses = ["New Lead", "Contacted", "Quoted", "Scheduled", "In Progress"]
 open_records = df[df["status"].isin(open_statuses)].shape[0] if not df.empty else 0
 completed_records = df[df["status"] == "Completed"].shape[0] if not df.empty else 0
 lost_records = df[df["status"] == "Lost"].shape[0] if not df.empty else 0
+
+today = date.today()
+today_followups = 0
+if not df_dates.empty:
+    today_followups = df_dates[
+        df_dates["next_follow_up_date"] == today
+    ].shape[0]
 
 stat1, stat2, stat3, stat4 = st.columns(4)
 
@@ -411,8 +512,8 @@ with stat4:
     st.markdown(
         f"""
         <div class="crm-card">
-            <div class="stat-label">Lost Leads</div>
-            <div class="stat-number">{lost_records}</div>
+            <div class="stat-label">Today's Follow-Ups</div>
+            <div class="stat-number">{today_followups}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -421,10 +522,8 @@ with stat4:
 st.write("")  # spacer
 
 # ============================================================
-# SIDEBAR FILTERS
+# SIDEBAR FILTER CONTROLS (now that df is loaded)
 # ============================================================
-
-st.sidebar.header("🔎 Filters")
 
 status_options = ["All"] + sorted([s for s in df["status"].dropna().unique()])
 status_filter = st.sidebar.selectbox("Status", status_options)
@@ -496,7 +595,7 @@ with tab_view:
     ]
     existing_cols = [c for c in display_cols if c in filtered.columns]
 
-    st.markdown('<div class="crm-card">', unsafe_allow_html=True)
+    st.markdown('<div class="crm-card soft">', unsafe_allow_html=True)
     st.dataframe(filtered[existing_cols], use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -905,7 +1004,7 @@ with tab_calendar:
         st.info("No follow-up dates found yet. Add customers with a 'Next Follow-Up' date first.")
     else:
         # Pick a date (built-in calendar widget)
-        selected_date = st.date_input("Select date to view", value=date.today())
+        selected_date = st.date_input("Select date to view", value=today)
 
         # Build month calendar for selected date's month
         year = selected_date.year
@@ -925,7 +1024,7 @@ with tab_calendar:
 
         month_name = calendar.month_name[month]
         cal_html = f"""
-        <div class="crm-card" style="margin-bottom: 1rem;">
+        <div class="crm-card soft" style="margin-bottom: 1rem;">
             <h4 style="margin-top:0; margin-bottom:0.5rem;">{month_name} {year}</h4>
             <table style="width:100%; border-collapse:collapse; text-align:center; font-size:0.9rem;">
                 <thead>
@@ -953,7 +1052,7 @@ with tab_calendar:
                         <td style="
                             padding:0.4rem;
                             height:2rem;
-                            background-color: rgba(37,99,235,0.09);
+                            background-color: rgba(37,99,235,0.22);
                             border-radius:0.35rem;
                             border:1px solid {PRIMARY_COLOR};
                             font-weight:600;
@@ -971,7 +1070,6 @@ with tab_calendar:
                         ">
                             {day}
                         </td>
-                        """
             cal_html += "</tr>"
         cal_html += "</tbody></table></div>"
 
@@ -1000,6 +1098,6 @@ with tab_calendar:
             ]
             available_cols = [c for c in show_cols if c in todays_rows.columns]
 
-            st.markdown('<div class="crm-card">', unsafe_allow_html=True)
+            st.markdown('<div class="crm-card soft">', unsafe_allow_html=True)
             st.dataframe(todays_rows[available_cols], use_container_width=True)
             st.markdown("</div>", unsafe_allow_html=True)
