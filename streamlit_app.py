@@ -2,12 +2,12 @@ import streamlit as st
 import pandas as pd
 import os
 import uuid
-from datetime import date
+from datetime import date, timedelta
 import hashlib
 import smtplib
 import ssl
 from email.message import EmailMessage
-import calendar  # for month calendar
+import calendar  # still imported if you want it later
 
 # ============================================================
 # SETTINGS / CONFIG
@@ -962,90 +962,40 @@ with tab_email:
                 st.error(f"Failed to send email: {e}")
 
 # ------------------------------------------------------------
-# TAB 5: CALENDAR & REMINDERS
+# TAB 5: CALENDAR & REMINDERS – LIVE 30 DAY VIEW
 # ------------------------------------------------------------
 
 with tab_calendar:
-    st.subheader("Calendar & Reminders")
+    st.subheader("Calendar & Reminders – Next 30 Days")
 
-    # No followup dates at all
     if df_dates.empty or df_dates["next_follow_up_date"].isna().all():
         st.info("No follow-up dates found yet. Add customers with a 'Next Follow-Up' date first.")
     else:
-        # Pick a date (built-in calendar widget)
-        selected_date = st.date_input("Select date to view", value=today)
+        start_date = today
+        end_date = today + timedelta(days=30)
 
-        # Build month calendar for selected date's month
-        year = selected_date.year
-        month = selected_date.month
-
-        # All follow-up dates in this month
-        month_rows = df_dates[
-            (df_dates["next_follow_up_date"].notnull())
-            & (df_dates["next_follow_up_date"].apply(lambda d: d.year == year and d.month == month))
-        ]
-
-        days_with_followups = set(
-            d.day for d in month_rows["next_follow_up_date"] if pd.notna(d)
-        )
-
-        cal = calendar.Calendar(firstweekday=6)  # 6 = Sunday start
-        month_name = calendar.month_name[month]
-
-        # Build calendar HTML safely (no broken f-strings)
-        cal_html_parts = []
-        cal_html_parts.append(
-            f"""
-            <div class="crm-card" style="margin-bottom: 1rem;">
-                <h4 style="margin-top:0; margin-bottom:0.5rem;">{month_name} {year}</h4>
-                <table style="width:100%; border-collapse:collapse; text-align:center; font-size:0.9rem;">
-                    <thead>
-                        <tr>
-            """
-        )
-
-        # Weekday headers
-        for wd in ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]:
-            cal_html_parts.append(
-                f'<th style="padding:0.35rem; border-bottom:1px solid {BORDER_COLOR}; color:{MUTED_TEXT};">{wd}</th>'
-            )
-
-        cal_html_parts.append("</tr></thead><tbody>")
-
-        # Weeks & days
-        for week in cal.monthdayscalendar(year, month):
-            cal_html_parts.append("<tr>")
-            for day in week:
-                if day == 0:
-                    cal_html_parts.append('<td style="padding:0.4rem; height:2rem;"></td>')
-                else:
-                    if day in days_with_followups:
-                        cal_html_parts.append(
-                            f'<td style="padding:0.4rem; height:2rem; background-color: rgba(37,99,235,0.09); '
-                            f'border-radius:0.35rem; border:1px solid {PRIMARY_COLOR}; font-weight:600; '
-                            f'color:{TEXT_COLOR};">{day}</td>'
-                        )
-                    else:
-                        cal_html_parts.append(
-                            f'<td style="padding:0.4rem; height:2rem; color:{TEXT_COLOR};">{day}</td>'
-                        )
-            cal_html_parts.append("</tr>")
-
-        cal_html_parts.append("</tbody></table></div>")
-        cal_html = "".join(cal_html_parts)
-        st.markdown(cal_html, unsafe_allow_html=True)
-
-        # Show follow-ups for the selected date
-        todays_rows = df_dates[df_dates["next_follow_up_date"] == selected_date]
+        # Filter for next 30 days
+        upcoming = df_dates[
+            (df_dates["next_follow_up_date"] >= start_date)
+            & (df_dates["next_follow_up_date"] <= end_date)
+        ].copy()
 
         st.markdown(
-            f"**Follow-ups on {selected_date.strftime('%b %d, %Y')}:** {len(todays_rows)}"
+            f"Showing follow-ups from **{start_date.strftime('%b %d, %Y')}** "
+            f"to **{end_date.strftime('%b %d, %Y')}**."
         )
 
-        if todays_rows.empty:
-            st.info("No follow-ups scheduled for this date.")
+        if upcoming.empty:
+            st.info("No follow-ups scheduled in the next 30 days.")
         else:
+            # Sort by date then status
+            upcoming = upcoming.sort_values(
+                by=["next_follow_up_date", "status"],
+                na_position="last",
+            )
+
             show_cols = [
+                "next_follow_up_date",
                 "customer_name",
                 "company_name",
                 "phone",
@@ -1054,11 +1004,26 @@ with tab_calendar:
                 "city",
                 "service_type",
                 "status",
-                "next_follow_up",
             ]
-            available_cols = [c for c in show_cols if c in todays_rows.columns]
+            available_cols = [c for c in show_cols if c in upcoming.columns]
 
+            # Rename column for nicer display
+            upcoming_display = upcoming[available_cols].rename(
+                columns={"next_follow_up_date": "follow_up_date"}
+            )
+
+            st.markdown("### 📅 Upcoming Follow-Ups (Next 30 Days)")
             st.markdown('<div class="crm-card">', unsafe_allow_html=True)
-            st.dataframe(todays_rows[available_cols], use_container_width=True)
+            st.dataframe(upcoming_display, use_container_width=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
+            # Optional: quick count per day
+            if "id" in upcoming.columns:
+                counts = upcoming.groupby("next_follow_up_date")["id"].count()
+            else:
+                counts = upcoming.groupby("next_follow_up_date").size()
+            counts = counts.reset_index()
+            counts.columns = ["date", "follow_ups"]
+
+            st.markdown("#### Daily Follow-Up Count")
+            st.table(counts)
