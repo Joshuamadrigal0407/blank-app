@@ -19,17 +19,38 @@ USERS_FILE = "users.csv"  # for login/sign-up accounts
 # Your logo (from ECI Foam Systems site / assets)
 LOGO_URL = "https://images.leadconnectorhq.com/image/f_webp/q_80/r_1200/u_https%3A//assets.cdn.filesafe.space/lkH7W8xbGl6pzt92LyGS/media/681428e788b94e7763044d2f.png"
 
-# Brand / UI colors (bright, high contrast, “elite”)
-PRIMARY_COLOR = "#1d4ed8"   # strong blue
+# Brighter, high-contrast colors (light / clean theme)
+PRIMARY_COLOR = "#2563eb"   # blue
 ACCENT_COLOR = "#f97316"    # orange
-APP_BG = "#0b1120"          # dark navy background
-CARD_BG = "#020617"         # very dark card bg
-CARD_ELEVATED = "#020617"
-TEXT_COLOR = "#f9fafb"      # near-white
-MUTED_TEXT = "#9ca3af"      # gray-400
-BORDER_COLOR = "#1f2937"    # gray-800
-HEADER_GRADIENT_LEFT = "#111827"
-HEADER_GRADIENT_RIGHT = "#020617"
+APP_BG = "#f3f4f6"          # light gray background
+CARD_BG = "#ffffff"         # white cards
+TEXT_COLOR = "#111827"      # near-black
+MUTED_TEXT = "#6b7280"      # gray-500
+BORDER_COLOR = "#e5e7eb"    # gray-200
+HEADER_GRADIENT_LEFT = "#1f2933"
+HEADER_GRADIENT_RIGHT = "#111827"
+
+# Choice lists (edit once, used everywhere)
+STATUS_CHOICES = [
+    "New Lead",
+    "Contacted",
+    "Quoted",
+    "Scheduled",
+    "In Progress",
+    "Completed",
+    "Lost",
+    "Existing Customer",
+]
+BUILDING_TYPES = ["Commercial", "Industrial", "Residential", "Agricultural", "Other"]
+SERVICE_TYPES = [
+    "Spray Foam Roof",
+    "Foam + Coating",
+    "Roof Coating Only",
+    "Interior Spray Foam",
+    "Wall Insulation",
+    "Other",
+]
+ROOF_TYPES = ["Flat", "Metal", "TPO/PVC", "Shingle", "Tile", "Other"]
 
 # ============================================================
 # USER / AUTH HELPERS
@@ -37,8 +58,7 @@ HEADER_GRADIENT_RIGHT = "#020617"
 
 def hash_password(password: str) -> str:
     """Return SHA256 hash of a password."""
-    import hashlib as _hashlib
-    return _hashlib.sha256(password.encode("utf-8")).hexdigest()
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 
 def load_users() -> pd.DataFrame:
@@ -58,8 +78,6 @@ def save_users(df: pd.DataFrame):
 
 def user_exists(email: str) -> bool:
     df = load_users()
-    if df.empty:
-        return False
     return not df[df["email"].str.lower() == email.lower()].empty
 
 
@@ -158,12 +176,12 @@ st.set_page_config(
     layout="wide",
 )
 
-# Global styling / theming
+# Global styling: bright, clear, easy to read
 st.markdown(
     f"""
     <style>
         .stApp {{
-            background: radial-gradient(circle at top left, #1e293b 0, {APP_BG} 45%, #020617 100%);
+            background-color: {APP_BG};
             color: {TEXT_COLOR};
         }}
         .block-container {{
@@ -175,73 +193,53 @@ st.markdown(
             color: {TEXT_COLOR};
             letter-spacing: 0.03em;
         }}
-        /* HEADER CARD */
         .crm-header {{
             background: linear-gradient(135deg, {HEADER_GRADIENT_LEFT}, {HEADER_GRADIENT_RIGHT});
             border-radius: 1.1rem;
-            padding: 1.4rem 1.6rem;
+            padding: 1.25rem 1.5rem;
             display: flex;
             align-items: center;
             gap: 1.25rem;
-            box-shadow: 0 18px 40px rgba(15,23,42,0.7);
-            border: 1px solid rgba(148,163,184,0.35);
-            position: relative;
-            overflow: hidden;
-        }}
-        .crm-header::after {{
-            content: "";
-            position: absolute;
-            inset: 0;
-            background: radial-gradient(circle at top right, rgba(37,99,235,0.32), transparent 60%);
-            opacity: 0.9;
-            pointer-events: none;
+            box-shadow: 0 12px 30px rgba(15,23,42,0.5);
+            border: 1px solid rgba(148,163,184,0.4);
         }}
         .crm-header-text-main {{
-            font-size: 1.7rem;
-            font-weight: 780;
+            font-size: 1.6rem;
+            font-weight: 750;
             color: #f9fafb;
-            margin-bottom: 0.15rem;
+            margin-bottom: 0.2rem;
         }}
         .crm-header-text-sub {{
-            font-size: 0.92rem;
+            font-size: 0.9rem;
             color: #e5e7eb;
             margin: 0;
         }}
         .crm-header-pill {{
-            display: inline-flex;
-            align-items: center;
-            gap: 0.35rem;
-            margin-top: 0.55rem;
+            display: inline-block;
+            margin-top: 0.4rem;
             font-size: 0.75rem;
             color: #e5e7eb;
-            padding: 0.27rem 0.8rem;
+            padding: 0.25rem 0.7rem;
             border-radius: 999px;
-            border: 1px solid rgba(248,250,252,0.5);
-            background: linear-gradient(135deg, rgba(37,99,235,0.55), rgba(249,115,22,0.55));
-            backdrop-filter: blur(8px);
-        }}
-        .crm-header-pill span.icon {{
-            font-size: 0.95rem;
+            border: 1px solid rgba(248,250,252,0.6);
+            background: rgba(37,99,235,0.2);
         }}
         .crm-card {{
-            background: linear-gradient(135deg, rgba(15,23,42,0.95), rgba(15,23,42,0.9));
+            background: {CARD_BG};
             border-radius: 0.9rem;
             padding: 1rem 1.25rem;
-            border: 1px solid rgba(55,65,81,0.9);
-            box-shadow: 0 14px 35px rgba(15,23,42,0.8);
-        }}
-        .crm-card.soft {{
-            background: {CARD_BG};
+            border: 1px solid {BORDER_COLOR};
+            box-shadow: 0 8px 22px rgba(148,163,184,0.35);
         }}
         .stat-number {{
             font-size: 1.6rem;
-            font-weight: 750;
+            font-weight: 700;
             color: {TEXT_COLOR};
         }}
         .stat-label {{
-            font-size: 0.76rem;
+            font-size: 0.8rem;
             text-transform: uppercase;
-            letter-spacing: 0.14em;
+            letter-spacing: 0.12em;
             color: {MUTED_TEXT};
         }}
         .dataframe td, .dataframe th {{
@@ -249,52 +247,16 @@ st.markdown(
             color: {TEXT_COLOR};
         }}
         .auth-card {{
-            background: linear-gradient(145deg, #020617, #020617);
+            background: {CARD_BG};
             border-radius: 1rem;
             padding: 1.5rem 1.75rem;
-            border: 1px solid rgba(75,85,99,0.9);
-            box-shadow: 0 18px 40px rgba(15,23,42,0.95);
+            border: 1px solid {BORDER_COLOR};
+            box-shadow: 0 10px 25px rgba(148,163,184,0.5);
         }}
-        /* Sidebar styling */
+        /* Sidebar */
         section[data-testid="stSidebar"] {{
-            background: radial-gradient(circle at top, #020617, #020617 45%, #020617 100%);
-            border-right: 1px solid rgba(31,41,55,0.9);
-        }}
-        section[data-testid="stSidebar"] h1, 
-        section[data-testid="stSidebar"] h2, 
-        section[data-testid="stSidebar"] h3 {{
-            color: {TEXT_COLOR};
-        }}
-        /* Buttons */
-        div.stButton > button, .stDownloadButton > button {{
-            background: linear-gradient(135deg, {PRIMARY_COLOR}, {ACCENT_COLOR});
-            color: #f9fafb;
-            border-radius: 999px;
-            border: none;
-            padding: 0.35rem 0.9rem;
-            font-weight: 600;
-            box-shadow: 0 8px 22px rgba(37,99,235,0.6);
-        }}
-        div.stButton > button:hover, .stDownloadButton > button:hover {{
-            filter: brightness(1.05);
-            box-shadow: 0 12px 25px rgba(37,99,235,0.9);
-        }}
-        /* Tabs */
-        button[data-baseweb="tab"] {{
-            font-weight: 500;
-            border-radius: 999px !important;
-            padding: 0.35rem 0.9rem;
-        }}
-        button[data-baseweb="tab"][aria-selected="true"] {{
-            background: linear-gradient(135deg, {PRIMARY_COLOR}, {ACCENT_COLOR});
-            color: #f9fafb !important;
-        }}
-        /* Inputs */
-        .stTextInput > label, .stDateInput > label, .stSelectbox > label, .stTextArea > label {{
-            color: {MUTED_TEXT};
-            font-size: 0.83rem;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
+            background-color: #e5e7eb;
+            border-right: 1px solid #d1d5db;
         }}
     </style>
     """,
@@ -306,27 +268,21 @@ st.markdown(
 # ============================================================
 
 def auth_screen():
-    logo_col, text_col = st.columns([1, 2])
+    logo_col, _ = st.columns([1, 3])
     with logo_col:
         st.image(LOGO_URL, use_column_width=True)
 
-    with text_col:
-        st.markdown(
-            f"""
-            <div style="margin-top: 0.25rem; margin-bottom: 1rem;">
-                <h2 style="margin-bottom: 0.25rem; color:{TEXT_COLOR};">
-                    ECI Foam Systems CRM
-                </h2>
-                <p style="color:{MUTED_TEXT}; font-size:0.92rem; margin:0 0 0.15rem 0;">
-                    Lead & customer management built for Spray Foam Roofing and Coating projects.
-                </p>
-                <p style="color:{MUTED_TEXT}; font-size:0.8rem; margin:0;">
-                    Serving the Central Valley & Bay Area • Leaders in Spray Foam Solutions Since 1975
-                </p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    st.markdown(
+        f"""
+        <div style="margin-top: 0.5rem; margin-bottom: 1rem;">
+            <h2 style="margin-bottom: 0.25rem; color:{TEXT_COLOR};">ECI Foam Systems CRM</h2>
+            <p style="color:{MUTED_TEXT}; font-size:0.9rem; margin:0;">
+                Secure login • Customer management • Calendar & reminders • Built-in email
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.markdown('<div class="auth-card">', unsafe_allow_html=True)
     tab_login, tab_signup = st.tabs(["Login", "Create Account"])
@@ -382,14 +338,14 @@ if not st.session_state["authenticated"]:
     st.stop()
 
 # ============================================================
-# SIDEBAR (shown only when logged in)
+# SIDEBAR (only after login)
 # ============================================================
 
 st.sidebar.image(LOGO_URL, use_column_width=True)
 st.sidebar.markdown(
     f"""
     <div style="margin-bottom:0.75rem;">
-        <p style="color:{TEXT_COLOR}; font-weight:600; font-size:0.9rem; margin-bottom:0.15rem;">
+        <p style="font-weight:600; font-size:0.9rem; margin-bottom:0.15rem;">
             ECI Foam Systems CRM
         </p>
         <p style="color:{MUTED_TEXT}; font-size:0.8rem; margin:0;">
@@ -401,9 +357,8 @@ st.sidebar.markdown(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.header("🔎 Filters")
 
-# Logout
+# Logout option
 if st.sidebar.button("🚪 Logout"):
     st.session_state["authenticated"] = False
     st.session_state["user_email"] = None
@@ -422,16 +377,14 @@ with header_col2:
     st.markdown(
         f"""
         <div class="crm-header">
-            <div style="flex: 1; position:relative; z-index:1;">
+            <div style="flex: 1;">
                 <div class="crm-header-text-main">ECI Foam Systems CRM</div>
                 <p class="crm-header-text-sub">
                     Track spray foam roofing, roof coatings, and insulation jobs – 
                     from first call to completed project.
                 </p>
                 <span class="crm-header-pill">
-                    <span class="icon">📍</span> Central Valley & Bay Area, CA
-                    <span style="margin-left:0.6rem;">|</span>
-                    <span class="icon">📞</span> (559) 645-4007
+                    Central & Northern California • Commercial & Industrial Roofing
                 </span>
             </div>
         </div>
@@ -522,8 +475,10 @@ with stat4:
 st.write("")  # spacer
 
 # ============================================================
-# SIDEBAR FILTER CONTROLS (now that df is loaded)
+# SIDEBAR FILTERS
 # ============================================================
+
+st.sidebar.header("🔎 Filters")
 
 status_options = ["All"] + sorted([s for s in df["status"].dropna().unique()])
 status_filter = st.sidebar.selectbox("Status", status_options)
@@ -535,6 +490,19 @@ service_options = ["All"] + sorted([s for s in df["service_type"].dropna().uniqu
 service_filter = st.sidebar.selectbox("Service Type", service_options)
 
 search_text = st.sidebar.text_input("Search customer / company / address", "")
+
+sort_by = st.sidebar.selectbox(
+    "Sort By",
+    [
+        "None",
+        "Customer Name",
+        "Company",
+        "City",
+        "Status",
+        "Next Follow-Up",
+        "Estimated Value",
+    ],
+)
 
 # Apply filters
 filtered = df.copy()
@@ -556,6 +524,18 @@ if search_text.strip():
         | filtered["address"].fillna("").str.lower().str.contains(q)
     )
     filtered = filtered[mask]
+
+# Sorting
+sort_map = {
+    "Customer Name": "customer_name",
+    "Company": "company_name",
+    "City": "city",
+    "Status": "status",
+    "Next Follow-Up": "next_follow_up",
+    "Estimated Value": "estimated_value",
+}
+if sort_by != "None" and sort_map.get(sort_by) in filtered.columns:
+    filtered = filtered.sort_values(by=sort_map[sort_by], na_position="last")
 
 # ============================================================
 # TABS (VIEW / ADD / EDIT / EMAIL / CALENDAR)
@@ -595,8 +575,11 @@ with tab_view:
     ]
     existing_cols = [c for c in display_cols if c in filtered.columns]
 
-    st.markdown('<div class="crm-card soft">', unsafe_allow_html=True)
-    st.dataframe(filtered[existing_cols], use_container_width=True)
+    st.markdown('<div class="crm-card">', unsafe_allow_html=True)
+    if not filtered.empty:
+        st.dataframe(filtered[existing_cols], use_container_width=True)
+    else:
+        st.write("No records match your filters yet.")
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.download_button(
@@ -605,6 +588,42 @@ with tab_view:
         file_name="sprayfoam_crm_filtered.csv",
         mime="text/csv",
     )
+
+    # Quick update panel (status + follow-up) without going to Edit tab
+    if not df.empty:
+        with st.expander("⚡ Quick Update: Status & Follow-Up", expanded=False):
+            df_quick = df.copy()
+            df_quick["label_quick"] = (
+                df_quick["customer_name"].fillna("")
+                + " | "
+                + df_quick["company_name"].fillna("")
+                + " | "
+                + df_quick["address"].fillna("")
+            )
+            selected_label_q = st.selectbox(
+                "Choose a record",
+                df_quick["label_quick"].tolist(),
+                key="quick_select",
+            )
+            row_q = df_quick[df_quick["label_quick"] == selected_label_q].iloc[0]
+            idx_q = df_quick[df_quick["label_quick"] == selected_label_q].index[0]
+
+            current_status = row_q.get("status", "New Lead")
+            status_idx = STATUS_CHOICES.index(current_status) if current_status in STATUS_CHOICES else 0
+            status_q = st.selectbox("Status", STATUS_CHOICES, index=status_idx)
+
+            nf_val = row_q.get("next_follow_up", str(date.today()))
+            nf_parsed = pd.to_datetime(nf_val, errors="coerce")
+            if pd.isna(nf_parsed):
+                nf_parsed = pd.Timestamp(date.today())
+            nf_q = st.date_input("Next Follow-Up Date", value=nf_parsed.date(), key="quick_date")
+
+            if st.button("💾 Save Quick Update"):
+                df.at[idx_q, "status"] = status_q
+                df.at[idx_q, "next_follow_up"] = str(nf_q)
+                save_data(df)
+                st.success("Quick update saved.")
+                st.experimental_rerun()
 
 # ------------------------------------------------------------
 # TAB 2: ADD CUSTOMER / LEAD
@@ -641,40 +660,23 @@ with tab_add:
             )
             building_type = st.selectbox(
                 "Building Type",
-                ["", "Commercial", "Industrial", "Residential", "Agricultural", "Other"],
+                [""] + BUILDING_TYPES,
             )
             service_type = st.selectbox(
                 "Service Type",
-                [
-                    "",
-                    "Spray Foam Roof",
-                    "Foam + Coating",
-                    "Roof Coating Only",
-                    "Interior Spray Foam",
-                    "Wall Insulation",
-                    "Other",
-                ],
+                [""] + SERVICE_TYPES,
             )
 
         with c4:
             roof_type = st.selectbox(
                 "Roof Type",
-                ["", "Flat", "Metal", "TPO/PVC", "Shingle", "Tile", "Other"],
+                [""] + ROOF_TYPES,
             )
             square_feet = st.text_input("Approx. Square Feet (roof/area)")
             estimated_value = st.text_input("Estimated Job Value ($)")
             status = st.selectbox(
                 "Status",
-                [
-                    "New Lead",
-                    "Contacted",
-                    "Quoted",
-                    "Scheduled",
-                    "In Progress",
-                    "Completed",
-                    "Lost",
-                    "Existing Customer",
-                ],
+                STATUS_CHOICES,
             )
             next_follow_up = st.date_input(
                 "Next Follow-Up Date",
@@ -773,59 +775,31 @@ with tab_edit:
                 lead_source_e = st.text_input(
                     "Lead Source", value=selected_row.get("lead_source", "")
                 )
+                building_choices = [""] + BUILDING_TYPES
+                building_current = selected_row.get("building_type", "")
+                building_idx = building_choices.index(building_current) if building_current in building_choices else 0
                 building_type_e = st.selectbox(
                     "Building Type",
-                    ["", "Commercial", "Industrial", "Residential", "Agricultural", "Other"],
-                    index=["", "Commercial", "Industrial", "Residential", "Agricultural", "Other"].index(
-                        selected_row.get("building_type", "")
-                    )
-                    if selected_row.get("building_type", "") in
-                    ["", "Commercial", "Industrial", "Residential", "Agricultural", "Other"]
-                    else 0,
+                    building_choices,
+                    index=building_idx,
                 )
+                service_choices = [""] + SERVICE_TYPES
+                service_current = selected_row.get("service_type", "")
+                service_idx = service_choices.index(service_current) if service_current in service_choices else 0
                 service_type_e = st.selectbox(
                     "Service Type",
-                    [
-                        "",
-                        "Spray Foam Roof",
-                        "Foam + Coating",
-                        "Roof Coating Only",
-                        "Interior Spray Foam",
-                        "Wall Insulation",
-                        "Other",
-                    ],
-                    index=[
-                        "",
-                        "Spray Foam Roof",
-                        "Foam + Coating",
-                        "Roof Coating Only",
-                        "Interior Spray Foam",
-                        "Wall Insulation",
-                        "Other",
-                    ].index(selected_row.get("service_type", ""))
-                    if selected_row.get("service_type", "") in
-                    [
-                        "",
-                        "Spray Foam Roof",
-                        "Foam + Coating",
-                        "Roof Coating Only",
-                        "Interior Spray Foam",
-                        "Wall Insulation",
-                        "Other",
-                    ]
-                    else 0,
+                    service_choices,
+                    index=service_idx,
                 )
 
             with c4:
+                roof_choices = [""] + ROOF_TYPES
+                roof_current = selected_row.get("roof_type", "")
+                roof_idx = roof_choices.index(roof_current) if roof_current in roof_choices else 0
                 roof_type_e = st.selectbox(
                     "Roof Type",
-                    ["", "Flat", "Metal", "TPO/PVC", "Shingle", "Tile", "Other"],
-                    index=["", "Flat", "Metal", "TPO/PVC", "Shingle", "Tile", "Other"].index(
-                        selected_row.get("roof_type", "")
-                    )
-                    if selected_row.get("roof_type", "") in
-                    ["", "Flat", "Metal", "TPO/PVC", "Shingle", "Tile", "Other"]
-                    else 0,
+                    roof_choices,
+                    index=roof_idx,
                 )
                 square_feet_e = st.text_input(
                     "Approx. Square Feet", value=str(selected_row.get("square_feet", ""))
@@ -834,40 +808,12 @@ with tab_edit:
                     "Estimated Job Value ($)",
                     value=str(selected_row.get("estimated_value", "")),
                 )
+                status_current = selected_row.get("status", "New Lead")
+                status_idx = STATUS_CHOICES.index(status_current) if status_current in STATUS_CHOICES else 0
                 status_e = st.selectbox(
                     "Status",
-                    [
-                        "New Lead",
-                        "Contacted",
-                        "Quoted",
-                        "Scheduled",
-                        "In Progress",
-                        "Completed",
-                        "Lost",
-                        "Existing Customer",
-                    ],
-                    index=[
-                        "New Lead",
-                        "Contacted",
-                        "Quoted",
-                        "Scheduled",
-                        "In Progress",
-                        "Completed",
-                        "Lost",
-                        "Existing Customer",
-                    ].index(selected_row.get("status", "New Lead"))
-                    if selected_row.get("status", "New Lead") in
-                    [
-                        "New Lead",
-                        "Contacted",
-                        "Quoted",
-                        "Scheduled",
-                        "In Progress",
-                        "Completed",
-                        "Lost",
-                        "Existing Customer",
-                    ]
-                    else 0,
+                    STATUS_CHOICES,
+                    index=status_idx,
                 )
                 next_follow_up_e = st.date_input(
                     "Next Follow-Up Date",
@@ -1024,7 +970,7 @@ with tab_calendar:
 
         month_name = calendar.month_name[month]
         cal_html = f"""
-        <div class="crm-card soft" style="margin-bottom: 1rem;">
+        <div class="crm-card" style="margin-bottom: 1rem;">
             <h4 style="margin-top:0; margin-bottom:0.5rem;">{month_name} {year}</h4>
             <table style="width:100%; border-collapse:collapse; text-align:center; font-size:0.9rem;">
                 <thead>
@@ -1052,7 +998,7 @@ with tab_calendar:
                         <td style="
                             padding:0.4rem;
                             height:2rem;
-                            background-color: rgba(37,99,235,0.22);
+                            background-color: rgba(37,99,235,0.09);
                             border-radius:0.35rem;
                             border:1px solid {PRIMARY_COLOR};
                             font-weight:600;
@@ -1098,6 +1044,7 @@ with tab_calendar:
             ]
             available_cols = [c for c in show_cols if c in todays_rows.columns]
 
-            st.markdown('<div class="crm-card soft">', unsafe_allow_html=True)
+            st.markdown('<div class="crm-card">', unsafe_allow_html=True)
             st.dataframe(todays_rows[available_cols], use_container_width=True)
             st.markdown("</div>", unsafe_allow_html=True)
+
