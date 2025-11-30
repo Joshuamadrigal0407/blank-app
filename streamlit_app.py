@@ -4,19 +4,30 @@ import os
 import uuid
 from datetime import date
 
+# ============================================================
+# SETTINGS / CONFIG
+# ============================================================
+
 DATA_FILE = "sprayfoam_crm.csv"
 
-# Brand assets / colors (from ecifoamsystems.com)
+# Your logo (from ECI Foam Systems site / assets)
 LOGO_URL = "https://images.leadconnectorhq.com/image/f_webp/q_80/r_1200/u_https%3A//assets.cdn.filesafe.space/lkH7W8xbGl6pzt92LyGS/media/681428e788b94e7763044d2f.png"
-PRIMARY_COLOR = "#fbbf24"  # warm yellow / amber accent
-DARK_BG = "#020617"        # very dark slate
-CARD_BG = "rgba(15,23,42,0.9)"
-BORDER_COLOR = "rgba(148,163,184,0.4)"
 
-# -----------------------------
-# Helpers to load/save data
-# -----------------------------
+# Brand colors - brighter & easier to read
+PRIMARY_COLOR = "#f59e0b"  # bright amber / orange
+DARK_HEADER = "#111827"    # slate-900
+LIGHT_BG = "#f3f4f6"       # gray-100
+CARD_BG = "#ffffff"        # white card
+TEXT_COLOR = "#111827"     # near-black
+MUTED_TEXT = "#6b7280"     # gray-500
+BORDER_COLOR = "#e5e7eb"   # gray-200
+
+# ============================================================
+# DATA HELPERS
+# ============================================================
+
 def load_data():
+    """Load CRM data from CSV, or create an empty DataFrame if it doesn't exist yet."""
     if not os.path.exists(DATA_FILE):
         cols = [
             "id",
@@ -39,36 +50,41 @@ def load_data():
             "notes",
         ]
         return pd.DataFrame(columns=cols)
+
     df = pd.read_csv(DATA_FILE)
+    # Make sure there's an ID column for editing
     if "id" not in df.columns:
         df["id"] = [str(uuid.uuid4()) for _ in range(len(df))]
     return df
 
 
 def save_data(df: pd.DataFrame):
+    """Save CRM data back to CSV."""
     df.to_csv(DATA_FILE, index=False)
 
 
 def new_id():
+    """Generate a unique ID for a new record."""
     return str(uuid.uuid4())
 
 
-# -----------------------------
-# Streamlit UI setup
-# -----------------------------
+# ============================================================
+# STREAMLIT PAGE SETUP
+# ============================================================
+
 st.set_page_config(
     page_title="ECI Foam Systems CRM",
-    page_icon=LOGO_URL,
+    page_icon="🧯",
     layout="wide",
 )
 
-# Global styling
+# Global styling: brighter theme, visible colors, clean cards
 st.markdown(
     f"""
     <style>
         .stApp {{
-            background: radial-gradient(circle at top left, #1e293b 0, #020617 45%, #000000 100%);
-            color: #e5e7eb;
+            background-color: {LIGHT_BG};
+            color: {TEXT_COLOR};
         }}
         .block-container {{
             padding-top: 1.5rem;
@@ -76,36 +92,65 @@ st.markdown(
             max-width: 1200px;
         }}
         h1, h2, h3, h4 {{
-            color: {PRIMARY_COLOR};
+            color: {TEXT_COLOR};
             letter-spacing: 0.03em;
+        }}
+        .crm-header {{
+            background: linear-gradient(135deg, {DARK_HEADER}, #020617);
+            border-radius: 1rem;
+            padding: 1.25rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            box-shadow: 0 14px 35px rgba(15,23,42,0.45);
+        }}
+        .crm-header-text-main {{
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #f9fafb;
+            margin-bottom: 0.25rem;
+        }}
+        .crm-header-text-sub {{
+            font-size: 0.9rem;
+            color: #e5e7eb;
+            margin: 0;
+        }}
+        .crm-header-pill {{
+            display: inline-block;
+            margin-top: 0.4rem;
+            font-size: 0.75rem;
+            color: #f9fafb;
+            padding: 0.25rem 0.7rem;
+            border-radius: 999px;
+            border: 1px solid rgba(249,250,251,0.35);
         }}
         .crm-card {{
             background: {CARD_BG};
             border-radius: 0.9rem;
             padding: 1rem 1.25rem;
             border: 1px solid {BORDER_COLOR};
-            box-shadow: 0 18px 40px rgba(15,23,42,0.65);
+            box-shadow: 0 12px 28px rgba(148,163,184,0.25);
         }}
         .stat-number {{
             font-size: 1.6rem;
             font-weight: 700;
-            color: #f9fafb;
+            color: {TEXT_COLOR};
         }}
         .stat-label {{
             font-size: 0.8rem;
             text-transform: uppercase;
             letter-spacing: 0.12em;
-            color: #9ca3af;
+            color: {MUTED_TEXT};
         }}
         .stat-pill {{
             font-size: 0.75rem;
             padding: 0.1rem 0.5rem;
             border-radius: 999px;
-            background: rgba(15,23,42,0.8);
+            background: rgba(249,250,251,0.95);
             border: 1px solid {BORDER_COLOR};
-            color: #e5e7eb;
+            color: {MUTED_TEXT};
         }}
-        /* tighten table text a bit */
+        /* Dataframe text size */
         .dataframe td, .dataframe th {{
             font-size: 0.85rem;
         }}
@@ -114,84 +159,105 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Header with logo & title
+# ============================================================
+# HEADER SECTION WITH LOGO
+# ============================================================
+
 header_col1, header_col2 = st.columns([1, 3])
+
 with header_col1:
-    st.image(LOGO_URL, use_column_width=True)
+    # Bigger, clearly visible logo
+    st.image(LOGO_URL, caption="ECI Foam Systems", use_column_width=True)
+
 with header_col2:
     st.markdown(
-        f"""
-        <div class="crm-card" style="margin-bottom: 0.75rem;">
-            <h1 style="margin-bottom: 0.15rem;">ECI Foam Systems CRM</h1>
-            <p style="margin: 0; color: #cbd5f5; font-size: 0.95rem;">
-                Track spray foam roofing, coatings, and insulation jobs from first call to completed project.
-            </p>
-            <p style="margin: 0.25rem 0 0; font-size: 0.8rem; color: #9ca3af;">
-                Central Valley & Bay Area • Spray Foam Roofing • Roof Coatings • Tank & Cold Storage Insulation
-            </p>
+        """
+        <div class="crm-header">
+            <div style="flex: 1;">
+                <div class="crm-header-text-main">ECI Foam Systems CRM</div>
+                <p class="crm-header-text-sub">
+                    Simple, elite tracking for spray foam roofing, roof coatings, and insulation jobs – 
+                    from first call to completed project.
+                </p>
+                <span class="crm-header-pill">
+                    Central & Northern California • Commercial & Industrial Roofing
+                </span>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
+st.write("")  # spacer
+
+# ============================================================
+# LOAD DATA
+# ============================================================
+
 df = load_data()
 
-# -----------------------------
-# Quick stats row
-# -----------------------------
-total_leads = len(df)
+# ============================================================
+# STATS ROW
+# ============================================================
+
+total_records = len(df)
 open_statuses = ["New Lead", "Contacted", "Quoted", "Scheduled", "In Progress"]
-open_leads = df[df["status"].isin(open_statuses)].shape[0] if not df.empty else 0
-completed_jobs = df[df["status"] == "Completed"].shape[0] if not df.empty else 0
-lost_leads = df[df["status"] == "Lost"].shape[0] if not df.empty else 0
+open_records = df[df["status"].isin(open_statuses)].shape[0] if not df.empty else 0
+completed_records = df[df["status"] == "Completed"].shape[0] if not df.empty else 0
+lost_records = df[df["status"] == "Lost"].shape[0] if not df.empty else 0
 
 stat1, stat2, stat3, stat4 = st.columns(4)
+
 with stat1:
     st.markdown(
         f"""
         <div class="crm-card">
             <div class="stat-label">Total Records</div>
-            <div class="stat-number">{total_leads}</div>
+            <div class="stat-number">{total_records}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
 with stat2:
     st.markdown(
         f"""
         <div class="crm-card">
             <div class="stat-label">Open / Active</div>
-            <div class="stat-number">{open_leads}</div>
+            <div class="stat-number">{open_records}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
 with stat3:
     st.markdown(
         f"""
         <div class="crm-card">
             <div class="stat-label">Completed Jobs</div>
-            <div class="stat-number">{completed_jobs}</div>
+            <div class="stat-number">{completed_records}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
 with stat4:
     st.markdown(
         f"""
         <div class="crm-card">
             <div class="stat-label">Lost Leads</div>
-            <div class="stat-number">{lost_leads}</div>
+            <div class="stat-number">{lost_records}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-st.write("")  # small spacer
+st.write("")  # spacer
 
-# -----------------------------
-# Sidebar filters
-# -----------------------------
+# ============================================================
+# SIDEBAR FILTERS
+# ============================================================
+
 st.sidebar.header("🔎 Filters")
 
 status_options = ["All"] + sorted([s for s in df["status"].dropna().unique()])
@@ -205,6 +271,7 @@ service_filter = st.sidebar.selectbox("Service Type", service_options)
 
 search_text = st.sidebar.text_input("Search customer / company / address", "")
 
+# Apply filters
 filtered = df.copy()
 
 if status_filter != "All":
@@ -225,16 +292,18 @@ if search_text.strip():
     )
     filtered = filtered[mask]
 
-# -----------------------------
-# Tabs
-# -----------------------------
+# ============================================================
+# TABS (VIEW / ADD / EDIT)
+# ============================================================
+
 tab_view, tab_add, tab_edit = st.tabs(
     ["📋 Customers & Leads", "➕ Add Customer / Lead", "✏️ Edit Customer / Lead"]
 )
 
-# -----------------------------
-# View tab
-# -----------------------------
+# ------------------------------------------------------------
+# TAB 1: VIEW
+# ------------------------------------------------------------
+
 with tab_view:
     st.subheader(f"Customers & Leads ({len(filtered)})")
 
@@ -255,7 +324,9 @@ with tab_view:
     ]
     existing_cols = [c for c in display_cols if c in filtered.columns]
 
+    st.markdown('<div class="crm-card">', unsafe_allow_html=True)
     st.dataframe(filtered[existing_cols], use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
     st.download_button(
         label="📥 Download filtered as CSV",
@@ -264,13 +335,15 @@ with tab_view:
         mime="text/csv",
     )
 
-# -----------------------------
-# Add Customer / Lead tab
-# -----------------------------
+# ------------------------------------------------------------
+# TAB 2: ADD CUSTOMER / LEAD
+# ------------------------------------------------------------
+
 with tab_add:
     st.subheader("Add Customer / Lead")
 
     with st.form("add_lead_form"):
+        # CUSTOMER INFO
         st.markdown("#### 👤 Customer Information")
         c1, c2 = st.columns(2)
 
@@ -286,6 +359,7 @@ with tab_add:
             state_val = st.text_input("State", value="CA")
             zip_code = st.text_input("ZIP Code")
 
+        # JOB INFO
         st.markdown("#### 🏗 Job / Spray Foam Details")
         c3, c4 = st.columns(2)
 
@@ -369,15 +443,17 @@ with tab_add:
             st.success("Customer / lead saved.")
             st.experimental_rerun()
 
-# -----------------------------
-# Edit tab
-# -----------------------------
+# ------------------------------------------------------------
+# TAB 3: EDIT CUSTOMER / LEAD
+# ------------------------------------------------------------
+
 with tab_edit:
     st.subheader("Edit Customer / Lead")
 
     if df.empty:
         st.info("No records to edit yet. Add some first.")
     else:
+        # Create a label to make it easy to find the right record
         df["label"] = (
             df["customer_name"].fillna("")
             + " | "
@@ -434,7 +510,7 @@ with tab_edit:
                         selected_row.get("building_type", "")
                     )
                     if selected_row.get("building_type", "") in
-                       ["", "Commercial", "Industrial", "Residential", "Agricultural", "Other"]
+                    ["", "Commercial", "Industrial", "Residential", "Agricultural", "Other"]
                     else 0,
                 )
                 service_type_e = st.selectbox(
@@ -458,15 +534,15 @@ with tab_edit:
                         "Other",
                     ].index(selected_row.get("service_type", ""))
                     if selected_row.get("service_type", "") in
-                       [
-                           "",
-                           "Spray Foam Roof",
-                           "Foam + Coating",
-                           "Roof Coating Only",
-                           "Interior Spray Foam",
-                           "Wall Insulation",
-                           "Other",
-                       ]
+                    [
+                        "",
+                        "Spray Foam Roof",
+                        "Foam + Coating",
+                        "Roof Coating Only",
+                        "Interior Spray Foam",
+                        "Wall Insulation",
+                        "Other",
+                    ]
                     else 0,
                 )
 
@@ -478,7 +554,7 @@ with tab_edit:
                         selected_row.get("roof_type", "")
                     )
                     if selected_row.get("roof_type", "") in
-                       ["", "Flat", "Metal", "TPO/PVC", "Shingle", "Tile", "Other"]
+                    ["", "Flat", "Metal", "TPO/PVC", "Shingle", "Tile", "Other"]
                     else 0,
                 )
                 square_feet_e = st.text_input(
@@ -511,16 +587,16 @@ with tab_edit:
                         "Existing Customer",
                     ].index(selected_row.get("status", "New Lead"))
                     if selected_row.get("status", "New Lead") in
-                       [
-                           "New Lead",
-                           "Contacted",
-                           "Quoted",
-                           "Scheduled",
-                           "In Progress",
-                           "Completed",
-                           "Lost",
-                           "Existing Customer",
-                       ]
+                    [
+                        "New Lead",
+                        "Contacted",
+                        "Quoted",
+                        "Scheduled",
+                        "In Progress",
+                        "Completed",
+                        "Lost",
+                        "Existing Customer",
+                    ]
                     else 0,
                 )
                 next_follow_up_e = st.date_input(
@@ -571,4 +647,3 @@ with tab_edit:
             save_data(df)
             st.success("Customer / lead deleted.")
             st.experimental_rerun()
-
