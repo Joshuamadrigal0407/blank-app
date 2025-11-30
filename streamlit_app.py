@@ -5,6 +5,13 @@ import uuid
 from datetime import date
 
 # ============================================================
+# SIMPLE LOGIN CONFIG
+# ============================================================
+# 👉 Change these to whatever you want
+APP_USERNAME = "eci"
+APP_PASSWORD = "foam123!"
+
+# ============================================================
 # SETTINGS / CONFIG
 # ============================================================
 
@@ -21,6 +28,7 @@ CARD_BG = "#ffffff"        # white card
 TEXT_COLOR = "#111827"     # near-black
 MUTED_TEXT = "#6b7280"     # gray-500
 BORDER_COLOR = "#e5e7eb"   # gray-200
+
 
 # ============================================================
 # DATA HELPERS
@@ -150,7 +158,6 @@ st.markdown(
             border: 1px solid {BORDER_COLOR};
             color: {MUTED_TEXT};
         }}
-        /* Dataframe text size */
         .dataframe td, .dataframe th {{
             font-size: 0.85rem;
         }}
@@ -159,14 +166,49 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
 # ============================================================
-# HEADER SECTION WITH LOGO
+# SIMPLE LOGIN GATE
+# ============================================================
+
+def login_screen():
+    st.markdown("## 🔐 Login to ECI Foam Systems CRM")
+
+    with st.form("login_form"):
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        submit = st.form_submit_button("Login")
+
+    if submit:
+        if username == APP_USERNAME and password == APP_PASSWORD:
+            st.session_state["authenticated"] = True
+            st.success("Logged in successfully.")
+            st.experimental_rerun()
+        else:
+            st.error("Invalid username or password.")
+
+# Initialize auth flag
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+# If not authenticated, show only login and stop
+if not st.session_state["authenticated"]:
+    login_screen()
+    st.stop()
+
+# Optional: logout button in sidebar
+if st.sidebar.button("🚪 Logout"):
+    st.session_state["authenticated"] = False
+    st.experimental_rerun()
+
+
+# ============================================================
+# HEADER SECTION WITH LOGO (only visible after login)
 # ============================================================
 
 header_col1, header_col2 = st.columns([1, 3])
 
 with header_col1:
-    # Bigger, clearly visible logo
     st.image(LOGO_URL, caption="ECI Foam Systems", use_column_width=True)
 
 with header_col2:
@@ -189,6 +231,7 @@ with header_col2:
     )
 
 st.write("")  # spacer
+
 
 # ============================================================
 # LOAD DATA
@@ -254,6 +297,7 @@ with stat4:
 
 st.write("")  # spacer
 
+
 # ============================================================
 # SIDEBAR FILTERS
 # ============================================================
@@ -291,6 +335,7 @@ if search_text.strip():
         | filtered["address"].fillna("").str.lower().str.contains(q)
     )
     filtered = filtered[mask]
+
 
 # ============================================================
 # TABS (VIEW / ADD / EDIT)
@@ -334,6 +379,7 @@ with tab_view:
         file_name="sprayfoam_crm_filtered.csv",
         mime="text/csv",
     )
+
 
 # ------------------------------------------------------------
 # TAB 2: ADD CUSTOMER / LEAD
@@ -442,6 +488,7 @@ with tab_add:
             save_data(df)
             st.success("Customer / lead saved.")
             st.experimental_rerun()
+
 
 # ------------------------------------------------------------
 # TAB 3: EDIT CUSTOMER / LEAD
