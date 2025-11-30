@@ -730,7 +730,7 @@ with tab_add:
                 "building_type": building_type.strip(),
                 "service_type": service_type.strip(),
                 "roof_type": roof_type.strip(),
-                "square_feet": square_feet.strip(),
+                "square_feet": square_feets.strip() if (square_feets := square_feet) else "",
                 "estimated_value": estimated_value.strip(),
                 "status": status.strip(),
                 "next_follow_up": str(next_follow_up),
@@ -982,26 +982,88 @@ with tab_email:
                 st.error(f"Failed to send email: {e}")
 
 # ------------------------------------------------------------
-# TAB 5: CALENDAR & REMINDERS – MONTH VIEW WITH NOTES
+# TAB 5: CALENDAR & REMINDERS – MONTH VIEW WITH NOTES (GOOGLE-LIKE)
 # ------------------------------------------------------------
 
 with tab_calendar:
-    st.subheader("Calendar & Reminders – Month View")
+    st.subheader("Calendar & Reminders")
+
+    # Ensure we have a 'current month' in session (like Google Calendar)
+    if "cal_current_date" not in st.session_state:
+        st.session_state["cal_current_date"] = date.today().replace(day=1)
+
+    # Navigation bar: Previous, Today, Next + Month/Year title
+    nav_col_left, nav_col_center, nav_col_right = st.columns([2, 3, 2])
+
+    # Local variable for current month before buttons
+    current_month_date = st.session_state["cal_current_date"]
+    cur_year = current_month_date.year
+    cur_month = current_month_date.month
+
+    with nav_col_left:
+        n1, n2, n3 = st.columns([1, 1.5, 1])
+        with n1:
+            if st.button("◀", key="cal_prev"):
+                # Go to previous month
+                if cur_month == 1:
+                    new_year = cur_year - 1
+                    new_month = 12
+                else:
+                    new_year = cur_year
+                    new_month = cur_month - 1
+                st.session_state["cal_current_date"] = date(new_year, new_month, 1)
+        with n2:
+            if st.button("Today", key="cal_today"):
+                today_local = date.today()
+                st.session_state["cal_current_date"] = today_local.replace(day=1)
+        with n3:
+            if st.button("▶", key="cal_next"):
+                # Go to next month
+                if cur_month == 12:
+                    new_year = cur_year + 1
+                    new_month = 1
+                else:
+                    new_year = cur_year
+                    new_month = cur_month + 1
+                st.session_state["cal_current_date"] = date(new_year, new_month, 1)
+
+    # Re-read state after button clicks
+    current_month_date = st.session_state["cal_current_date"]
+    year = current_month_date.year
+    month = current_month_date.month
+
+    month_start = date(year, month, 1)
+    last_day = calendar.monthrange(year, month)[1]
+    month_end = date(year, month, last_day)
+    month_name = calendar.month_name[month]
+
+    with nav_col_center:
+        st.markdown(
+            f"""
+            <div style="
+                text-align:center;
+                font-size:1.3rem;
+                font-weight:600;
+                padding-top:0.3rem;
+            ">
+                {month_name} {year}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with nav_col_right:
+        st.write("")  # spacer (placeholder for future filters if you want)
+
+    st.markdown(
+        f"Viewing **{month_name} {year}** "
+        f"({month_start.strftime('%b %d')} – {month_end.strftime('%b %d')})."
+    )
 
     # Load calendar notes and parse dates
     notes_df = load_calendar_notes()
     if not notes_df.empty:
         notes_df["date"] = pd.to_datetime(notes_df["date"], errors="coerce").dt.date
-
-    # Let user pick any date; we use its month & year for the grid
-    selected_date = st.date_input("Choose a month to view", value=today)
-    year = selected_date.year
-    month = selected_date.month
-
-    # Boundaries of that month
-    month_start = date(year, month, 1)
-    last_day = calendar.monthrange(year, month)[1]
-    month_end = date(year, month, last_day)
 
     # Filter follow-ups within that month (may be empty)
     if not df_dates.empty and "next_follow_up_date" in df_dates.columns:
@@ -1020,44 +1082,38 @@ with tab_calendar:
     else:
         notes_month = pd.DataFrame(columns=["date", "note"])
 
-    month_name = calendar.month_name[month]
-    st.markdown(
-        f"Showing follow-ups for **{month_name} {year}** "
-        f"({month_start.strftime('%b %d')} – {month_end.strftime('%b %d')})."
-    )
-
-    # Build a month grid similar to Google Calendar
-    cal = calendar.Calendar(firstweekday=6)  # 6 = Sunday start (Sun–Sat)
+    # ----------------- MONTH GRID (GOOGLE-LIKE) -----------------
+    cal = calendar.Calendar(firstweekday=6)  # 6 = Sunday start
 
     cal_html_parts = []
     cal_html_parts.append(
         f"""
-        <div class="crm-card" style="margin-bottom: 1rem;">
-            <h4 style="margin-top:0; margin-bottom:0.5rem;">{month_name} {year}</h4>
-            <table style="width:100%; border-collapse:collapse; text-align:center; font-size:0.8rem;">
+        <div class="crm-card" style="margin-top:0.75rem; margin-bottom: 1rem;">
+            <table style="width:100%; border-collapse:collapse; font-size:0.8rem;">
                 <thead>
                     <tr>
         """
     )
 
-    # Weekday headers
+    # Weekday headers like Google Calendar
     for wd in ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]:
         cal_html_parts.append(
-            f'<th style="padding:0.4rem; border-bottom:1px solid {BORDER_COLOR}; '
-            f'color:{MUTED_TEXT}; font-weight:600;">{wd}</th>'
+            f'<th style="padding:0.5rem 0.25rem; border-bottom:1px solid {BORDER_COLOR}; '
+            f'color:{MUTED_TEXT}; font-weight:600; text-align:right; padding-right:0.5rem;">{wd}</th>'
         )
 
     cal_html_parts.append("</tr></thead><tbody>")
 
     # Weeks & days
+    today_local = date.today()
     for week in cal.monthdayscalendar(year, month):
         cal_html_parts.append("<tr>")
-        for day_num in week:
+        for idx, day_num in enumerate(week):
             if day_num == 0:
-                # Empty cell (days from previous/next month)
+                # Empty cell (days outside this month)
                 cal_html_parts.append(
-                    '<td style="padding:6px; height:110px; border:1px solid '
-                    f'{BORDER_COLOR}; background-color:#f9fafb;"></td>'
+                    '<td style="padding:0; height:110px; '
+                    f'border:1px solid {BORDER_COLOR}; background-color:#f9fafb;"></td>'
                 )
             else:
                 day_date = date(year, month, day_num)
@@ -1079,28 +1135,32 @@ with tab_calendar:
 
                 has_events = not day_rows.empty
                 has_note = bool(note_text)
-                is_today = (day_date == today)
+                is_today = (day_date == today_local)
 
-                # Base style for the day cell
-                cell_style = (
-                    "padding:6px; height:110px; vertical-align:top; "
-                    f"border:1px solid {BORDER_COLOR}; text-align:left; "
-                    "background-color:#ffffff;"
-                )
+                # Weekend styling (Sat/Sun) like Google light grey
+                is_weekend = (idx == 0 or idx == 6)  # Sun or Sat column
 
+                # Base cell style
+                bg_color = "#ffffff"
+                if is_weekend:
+                    bg_color = "#fafafa"
                 if has_events or has_note:
-                    cell_style = cell_style.replace(
-                        "background-color:#ffffff;",
-                        "background-color:rgba(37,99,235,0.04);"
-                    )
+                    bg_color = "rgba(37,99,235,0.04)"
+
+                cell_style = (
+                    f"padding:2px 4px; height:110px; vertical-align:top; "
+                    f"border:1px solid {BORDER_COLOR}; text-align:left; "
+                    f"background-color:{bg_color};"
+                )
                 if is_today:
                     cell_style += f" box-shadow:0 0 0 2px {ACCENT_COLOR} inset;"
 
-                # Build inner HTML: day number + events + optional note
+                # Inner HTML: Day number at top-right + events + note
                 cell_inner_parts = []
                 cell_inner_parts.append(
                     f'<div style="font-weight:600; font-size:0.8rem; '
-                    f'margin-bottom:4px; color:{TEXT_COLOR};">{day_num}</div>'
+                    f'text-align:right; margin-bottom:4px; color:{TEXT_COLOR};">'
+                    f'{day_num}</div>'
                 )
 
                 # Show up to 3 follow-ups
@@ -1108,8 +1168,8 @@ with tab_calendar:
                     for _, r in day_rows.head(3).iterrows():
                         name = (r.get("customer_name") or r.get("company_name") or "Job")
                         name = name.strip()
-                        if len(name) > 22:
-                            name = name[:21] + "…"
+                        if len(name) > 24:
+                            name = name[:23] + "…"
 
                         service = (r.get("service_type") or "").strip()
                         service_txt = f" – {service}" if service else ""
@@ -1123,20 +1183,21 @@ with tab_calendar:
                             '</div>'
                         )
 
-                    # If more than 3, show "+X more"
                     extra = len(day_rows) - 3
                     if extra > 0:
                         cell_inner_parts.append(
-                            '<div style="font-size:0.7rem; color:#4b5563;">'
-                            f'+{extra} more…'
+                            '<div style="font-size:0.7rem; color:#4b5563; margin-left:4px;">'
+                            f'+{extra} more'
                             '</div>'
                         )
 
-                # Custom note for that date (wrapping text)
+                # Custom note (multi-line, wraps)
                 if has_note:
                     cell_inner_parts.append(
                         '<div style="font-size:0.7rem; margin-top:4px; '
-                        'color:#374151; white-space:normal; line-height:1.2;">'
+                        'color:#374151; white-space:normal; line-height:1.2; '
+                        'padding:2px 4px; border-radius:4px; '
+                        'background-color:#fef3c7;">'
                         f'{note_text}'
                         '</div>'
                     )
@@ -1153,11 +1214,11 @@ with tab_calendar:
 
     st.markdown(cal_html, unsafe_allow_html=True)
 
-    # ---------- NOTE EDITOR ----------
+    # ---------- NOTE EDITOR (below calendar) ----------
     st.markdown("### Add or Edit Calendar Note")
 
     with st.form("calendar_note_form"):
-        note_date = st.date_input("Date", value=selected_date, key="note_date")
+        note_date = st.date_input("Date", value=today_local, key="note_date")
 
         # Load latest notes again (in case something changed)
         notes_df_current = load_calendar_notes()
@@ -1242,3 +1303,4 @@ with tab_calendar:
         st.markdown('<div class="crm-card">', unsafe_allow_html=True)
         st.dataframe(month_display, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
+
