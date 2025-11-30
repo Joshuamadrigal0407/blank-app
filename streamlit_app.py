@@ -1120,4 +1120,4 @@ with tab_calendar:
             st.markdown("### 📋 Follow-Ups in This Month")
             st.markdown('<div class="crm-card">', unsafe_allow_html=True)
             st.dataframe(month_display, use_container_width=True)
-            st.markmarkdown("</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
