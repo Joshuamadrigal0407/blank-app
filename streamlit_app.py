@@ -14,7 +14,8 @@ import calendar  # used for month view calendar
 # ============================================================
 
 DATA_FILE = "sprayfoam_crm.csv"
-USERS_FILE = "users.csv"  # for login/sign-up accounts
+USERS_FILE = "users.csv"           # for login/sign-up accounts
+CAL_NOTES_FILE = "calendar_notes.csv"  # for free-form calendar notes
 
 # Your logo
 LOGO_URL = (
@@ -149,6 +150,25 @@ def save_data(df: pd.DataFrame):
 def new_id():
     """Generate a unique ID for a new record."""
     return str(uuid.uuid4())
+
+
+# ============================================================
+# CALENDAR NOTES HELPERS
+# ============================================================
+
+def load_calendar_notes() -> pd.DataFrame:
+    """Load calendar notes from CSV (one row per date)."""
+    if not os.path.exists(CAL_NOTES_FILE):
+        return pd.DataFrame(columns=["date", "note"])
+    df = pd.read_csv(CAL_NOTES_FILE)
+    if "date" not in df.columns or "note" not in df.columns:
+        df = pd.DataFrame(columns=["date", "note"])
+    return df
+
+
+def save_calendar_notes(df: pd.DataFrame):
+    """Save calendar notes back to CSV."""
+    df.to_csv(CAL_NOTES_FILE, index=False)
 
 
 # ============================================================
@@ -362,7 +382,7 @@ st.sidebar.markdown(
 st.sidebar.markdown("---")
 
 # Logout option
-if st.sidebar.button("🚪 Logout"):
+if st.sidebar.button("Logout"):
     st.session_state["authenticated"] = False
     st.session_state["user_email"] = None
     st.experimental_rerun()
@@ -482,7 +502,7 @@ st.write("")  # spacer
 # SIDEBAR FILTERS
 # ============================================================
 
-st.sidebar.header("🔎 Filters")
+st.sidebar.header("Filters")
 
 status_options = ["All"] + sorted([s for s in df["status"].dropna().unique()]) if not df.empty else ["All"]
 status_filter = st.sidebar.selectbox("Status", status_options)
@@ -548,11 +568,11 @@ if not filtered.empty:
 
 tab_view, tab_add, tab_edit, tab_email, tab_calendar = st.tabs(
     [
-        "📋 Customers & Leads",
-        "➕ Add Customer / Lead",
-        "✏️ Edit Customer / Lead",
-        "📧 Email Client",
-        "📅 Calendar & Reminders",
+        "Customers & Leads",
+        "Add Customer / Lead",
+        "Edit Customer / Lead",
+        "Email Client",
+        "Calendar & Reminders",
     ]
 )
 
@@ -588,7 +608,7 @@ with tab_view:
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.download_button(
-        label="📥 Download filtered as CSV",
+        label="Download filtered as CSV",
         data=(filtered.to_csv(index=False) if not filtered.empty else ""),
         file_name="sprayfoam_crm_filtered.csv",
         mime="text/csv",
@@ -596,7 +616,7 @@ with tab_view:
 
     # Quick update panel (status + follow-up) without going to Edit tab
     if not df.empty:
-        with st.expander("⚡ Quick Update: Status & Follow-Up", expanded=False):
+        with st.expander("Quick Update: Status & Follow-Up", expanded=False):
             df_quick = df.copy()
             df_quick["label_quick"] = (
                 df_quick["customer_name"].fillna("")
@@ -623,7 +643,7 @@ with tab_view:
                 nf_parsed = pd.Timestamp(today)
             nf_q = st.date_input("Next Follow-Up Date", value=nf_parsed.date(), key="quick_date")
 
-            if st.button("💾 Save Quick Update"):
+            if st.button("Save Quick Update"):
                 df.at[idx_q, "status"] = status_q
                 df.at[idx_q, "next_follow_up"] = str(nf_q)
                 save_data(df)
@@ -639,7 +659,7 @@ with tab_add:
 
     with st.form("add_lead_form"):
         # CUSTOMER INFO
-        st.markdown("#### 👤 Customer Information")
+        st.markdown("#### Customer Information")
         c1, c2 = st.columns(2)
 
         with c1:
@@ -655,7 +675,7 @@ with tab_add:
             zip_code = st.text_input("ZIP Code")
 
         # JOB INFO
-        st.markdown("#### 🏗 Job / Spray Foam Details")
+        st.markdown("#### Job / Spray Foam Details")
         c3, c4 = st.columns(2)
 
         with c3:
@@ -690,7 +710,7 @@ with tab_add:
 
         notes = st.text_area("Notes (scope, conditions, objections, etc.)")
 
-        submitted = st.form_submit_button("💾 Save")
+        submitted = st.form_submit_button("Save")
 
     if submitted:
         if not customer_name.strip() and not company_name.strip():
@@ -744,7 +764,7 @@ with tab_edit:
         selected_idx = df[df["label"] == selected_label].index[0]
 
         with st.form("edit_lead_form"):
-            st.markdown("#### 👤 Customer Information")
+            st.markdown("#### Customer Information")
             c1, c2 = st.columns(2)
 
             with c1:
@@ -773,7 +793,7 @@ with tab_edit:
                     "ZIP Code", value=selected_row.get("zip_code", "")
                 )
 
-            st.markdown("#### 🏗 Job / Spray Foam Details")
+            st.markdown("#### Job / Spray Foam Details")
             c3, c4 = st.columns(2)
 
             with c3:
@@ -849,9 +869,9 @@ with tab_edit:
 
             col_btn1, col_btn2 = st.columns(2)
             with col_btn1:
-                update_btn = st.form_submit_button("💾 Update")
+                update_btn = st.form_submit_button("Update")
             with col_btn2:
-                delete_btn = st.form_submit_button("🗑️ Delete")
+                delete_btn = st.form_submit_button("Delete")
 
         if update_btn:
             df.at[selected_idx, "customer_name"] = customer_name_e
@@ -945,7 +965,7 @@ with tab_email:
 
         body = st.text_area("Message", value=default_body, height=220)
 
-    if st.button("📧 Send Email"):
+    if st.button("Send Email"):
         if not (yahoo_email and yahoo_app_password and to_email and subject and body):
             st.error("All fields (From, app password, To, subject, message) are required.")
         else:
@@ -962,162 +982,263 @@ with tab_email:
                 st.error(f"Failed to send email: {e}")
 
 # ------------------------------------------------------------
-# TAB 5: CALENDAR & REMINDERS – MONTH VIEW (GOOGLE-LIKE)
+# TAB 5: CALENDAR & REMINDERS – MONTH VIEW WITH NOTES
 # ------------------------------------------------------------
 
 with tab_calendar:
     st.subheader("Calendar & Reminders – Month View")
 
-    # No followup dates at all
-    if df_dates.empty or df_dates["next_follow_up_date"].isna().all():
-        st.info("No follow-up dates found yet. Add customers with a 'Next Follow-Up' date first.")
-    else:
-        # Let user pick any date; we use its month & year
-        selected_date = st.date_input("Choose a month to view", value=today)
-        year = selected_date.year
-        month = selected_date.month
+    # Load calendar notes and parse dates
+    notes_df = load_calendar_notes()
+    if not notes_df.empty:
+        notes_df["date"] = pd.to_datetime(notes_df["date"], errors="coerce").dt.date
 
-        # Boundaries of that month
-        month_start = date(year, month, 1)
-        last_day = calendar.monthrange(year, month)[1]
-        month_end = date(year, month, last_day)
+    # Let user pick any date; we use its month & year for the grid
+    selected_date = st.date_input("Choose a month to view", value=today)
+    year = selected_date.year
+    month = selected_date.month
 
-        # Filter follow-ups within that month
+    # Boundaries of that month
+    month_start = date(year, month, 1)
+    last_day = calendar.monthrange(year, month)[1]
+    month_end = date(year, month, last_day)
+
+    # Filter follow-ups within that month (may be empty)
+    if not df_dates.empty and "next_follow_up_date" in df_dates.columns:
         month_rows = df_dates[
             (df_dates["next_follow_up_date"] >= month_start)
             & (df_dates["next_follow_up_date"] <= month_end)
         ].copy()
+    else:
+        month_rows = pd.DataFrame(columns=df_dates.columns)
 
-        month_name = calendar.month_name[month]
-        st.markdown(
-            f"Showing follow-ups for **{month_name} {year}** "
-            f"({month_start.strftime('%b %d')} – {month_end.strftime('%b %d')})."
-        )
+    # Filter notes within that month
+    if not notes_df.empty:
+        notes_month = notes_df[
+            (notes_df["date"] >= month_start) & (notes_df["date"] <= month_end)
+        ].copy()
+    else:
+        notes_month = pd.DataFrame(columns=["date", "note"])
 
-        # Build a month grid similar to Google Calendar
-        cal = calendar.Calendar(firstweekday=6)  # 6 = Sunday start (Sun–Sat)
+    month_name = calendar.month_name[month]
+    st.markdown(
+        f"Showing follow-ups for **{month_name} {year}** "
+        f"({month_start.strftime('%b %d')} – {month_end.strftime('%b %d')})."
+    )
 
-        cal_html_parts = []
+    # Build a month grid similar to Google Calendar
+    cal = calendar.Calendar(firstweekday=6)  # 6 = Sunday start (Sun–Sat)
+
+    cal_html_parts = []
+    cal_html_parts.append(
+        f"""
+        <div class="crm-card" style="margin-bottom: 1rem;">
+            <h4 style="margin-top:0; margin-bottom:0.5rem;">{month_name} {year}</h4>
+            <table style="width:100%; border-collapse:collapse; text-align:center; font-size:0.8rem;">
+                <thead>
+                    <tr>
+        """
+    )
+
+    # Weekday headers
+    for wd in ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]:
         cal_html_parts.append(
-            f"""
-            <div class="crm-card" style="margin-bottom: 1rem;">
-                <h4 style="margin-top:0; margin-bottom:0.5rem;">{month_name} {year}</h4>
-                <table style="width:100%; border-collapse:collapse; text-align:center; font-size:0.8rem;">
-                    <thead>
-                        <tr>
-            """
+            f'<th style="padding:0.4rem; border-bottom:1px solid {BORDER_COLOR}; '
+            f'color:{MUTED_TEXT}; font-weight:600;">{wd}</th>'
         )
 
-        # Weekday headers
-        for wd in ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]:
-            cal_html_parts.append(
-                f'<th style="padding:0.4rem; border-bottom:1px solid {BORDER_COLOR}; '
-                f'color:{MUTED_TEXT}; font-weight:600;">{wd}</th>'
-            )
+    cal_html_parts.append("</tr></thead><tbody>")
 
-        cal_html_parts.append("</tr></thead><tbody>")
+    # Weeks & days
+    for week in cal.monthdayscalendar(year, month):
+        cal_html_parts.append("<tr>")
+        for day_num in week:
+            if day_num == 0:
+                # Empty cell (days from previous/next month)
+                cal_html_parts.append(
+                    '<td style="padding:6px; height:110px; border:1px solid '
+                    f'{BORDER_COLOR}; background-color:#f9fafb;"></td>'
+                )
+            else:
+                day_date = date(year, month, day_num)
 
-        # Weeks & days
-        for week in cal.monthdayscalendar(year, month):
-            cal_html_parts.append("<tr>")
-            for day_num in week:
-                if day_num == 0:
-                    # Empty cell (days from previous/next month)
-                    cal_html_parts.append(
-                        '<td style="padding:6px; height:90px; border:1px solid '
-                        f'{BORDER_COLOR}; background-color:#f9fafb;"></td>'
-                    )
-                else:
-                    day_date = date(year, month, day_num)
-                    # All follow-ups for this exact date
+                # All follow-ups for this exact date
+                if not month_rows.empty and "next_follow_up_date" in month_rows.columns:
                     day_rows = month_rows[
                         month_rows["next_follow_up_date"] == day_date
                     ]
+                else:
+                    day_rows = pd.DataFrame(columns=month_rows.columns)
 
-                    has_events = not day_rows.empty
-                    is_today = (day_date == today)
+                # Any custom calendar note for this date
+                note_text = ""
+                if not notes_month.empty:
+                    match_note = notes_month[notes_month["date"] == day_date]
+                    if not match_note.empty:
+                        note_text = str(match_note.iloc[0]["note"]).strip()
 
-                    # Base style for the day cell
-                    cell_style = (
-                        "padding:6px; height:90px; vertical-align:top; "
-                        f"border:1px solid {BORDER_COLOR}; text-align:left; "
-                        "background-color:#ffffff;"
+                has_events = not day_rows.empty
+                has_note = bool(note_text)
+                is_today = (day_date == today)
+
+                # Base style for the day cell
+                cell_style = (
+                    "padding:6px; height:110px; vertical-align:top; "
+                    f"border:1px solid {BORDER_COLOR}; text-align:left; "
+                    "background-color:#ffffff;"
+                )
+
+                if has_events or has_note:
+                    cell_style = cell_style.replace(
+                        "background-color:#ffffff;",
+                        "background-color:rgba(37,99,235,0.04);"
                     )
+                if is_today:
+                    cell_style += f" box-shadow:0 0 0 2px {ACCENT_COLOR} inset;"
 
-                    if has_events:
-                        cell_style = cell_style.replace(
-                            "background-color:#ffffff;",
-                            "background-color:rgba(37,99,235,0.04);"
+                # Build inner HTML: day number + events + optional note
+                cell_inner_parts = []
+                cell_inner_parts.append(
+                    f'<div style="font-weight:600; font-size:0.8rem; '
+                    f'margin-bottom:4px; color:{TEXT_COLOR};">{day_num}</div>'
+                )
+
+                # Show up to 3 follow-ups
+                if has_events:
+                    for _, r in day_rows.head(3).iterrows():
+                        name = (r.get("customer_name") or r.get("company_name") or "Job")
+                        name = name.strip()
+                        if len(name) > 22:
+                            name = name[:21] + "…"
+
+                        service = (r.get("service_type") or "").strip()
+                        service_txt = f" – {service}" if service else ""
+
+                        cell_inner_parts.append(
+                            '<div style="font-size:0.72rem; padding:2px 4px; '
+                            'margin-bottom:2px; border-radius:4px; '
+                            f'background-color:rgba(37,99,235,0.12); color:{TEXT_COLOR}; '
+                            'overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">'
+                            f'{name}{service_txt}'
+                            '</div>'
                         )
-                    if is_today:
-                        cell_style += f" box-shadow:0 0 0 2px {ACCENT_COLOR} inset;"
 
-                    # Build inner HTML: day number + up to 3 events
-                    cell_inner_parts = []
+                    # If more than 3, show "+X more"
+                    extra = len(day_rows) - 3
+                    if extra > 0:
+                        cell_inner_parts.append(
+                            '<div style="font-size:0.7rem; color:#4b5563;">'
+                            f'+{extra} more…'
+                            '</div>'
+                        )
+
+                # Custom note for that date (wrapping text)
+                if has_note:
                     cell_inner_parts.append(
-                        f'<div style="font-weight:600; font-size:0.8rem; '
-                        f'margin-bottom:4px; color:{TEXT_COLOR};">{day_num}</div>'
+                        '<div style="font-size:0.7rem; margin-top:4px; '
+                        'color:#374151; white-space:normal; line-height:1.2;">'
+                        f'{note_text}'
+                        '</div>'
                     )
 
-                    if has_events:
-                        # Show up to 3 follow-ups
-                        for _, r in day_rows.head(3).iterrows():
-                            name = (r.get("customer_name") or r.get("company_name") or "Job")
-                            name = name.strip()
-                            if len(name) > 22:
-                                name = name[:21] + "…"
+                cell_inner_html = "".join(cell_inner_parts)
+                cal_html_parts.append(
+                    f'<td style="{cell_style}">{cell_inner_html}</td>'
+                )
 
-                            service = (r.get("service_type") or "").strip()
-                            service_txt = f" – {service}" if service else ""
+        cal_html_parts.append("</tr>")
 
-                            cell_inner_parts.append(
-                                '<div style="font-size:0.72rem; padding:2px 4px; '
-                                'margin-bottom:2px; border-radius:4px; '
-                                f'background-color:rgba(37,99,235,0.12); color:{TEXT_COLOR}; '
-                                'overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">'
-                                f'{name}{service_txt}'
-                                '</div>'
-                            )
+    cal_html_parts.append("</tbody></table></div>")
+    cal_html = "".join(cal_html_parts)
 
-                        # If more than 3, show "+X more"
-                        extra = len(day_rows) - 3
-                        if extra > 0:
-                            cell_inner_parts.append(
-                                '<div style="font-size:0.7rem; color:#4b5563;">'
-                                f'+{extra} more…'
-                                '</div>'
-                            )
+    st.markdown(cal_html, unsafe_allow_html=True)
 
-                    cell_inner_html = "".join(cell_inner_parts)
-                    cal_html_parts.append(
-                        f'<td style="{cell_style}">{cell_inner_html}</td>'
-                    )
+    # ---------- NOTE EDITOR ----------
+    st.markdown("### Add or Edit Calendar Note")
 
-            cal_html_parts.append("</tr>")
+    with st.form("calendar_note_form"):
+        note_date = st.date_input("Date", value=selected_date, key="note_date")
 
-        cal_html_parts.append("</tbody></table></div>")
-        cal_html = "".join(cal_html_parts)
+        # Load latest notes again (in case something changed)
+        notes_df_current = load_calendar_notes()
+        if not notes_df_current.empty:
+            notes_df_current["date"] = pd.to_datetime(
+                notes_df_current["date"], errors="coerce"
+            ).dt.date
 
-        st.markdown(cal_html, unsafe_allow_html=True)
+        existing_note = ""
+        if not notes_df_current.empty:
+            match = notes_df_current[notes_df_current["date"] == note_date]
+            if not match.empty:
+                existing_note = str(match.iloc[0]["note"])
 
-        # Optional: below calendar, show table of all follow-ups for the month
-        if not month_rows.empty:
-            show_cols = [
-                "next_follow_up_date",
-                "customer_name",
-                "company_name",
-                "city",
-                "service_type",
-                "status",
-                "phone",
-                "email",
-            ]
-            available_cols = [c for c in show_cols if c in month_rows.columns]
-            month_display = month_rows[available_cols].rename(
-                columns={"next_follow_up_date": "follow_up_date"}
-            ).sort_values("follow_up_date")
+        note_text_input = st.text_area(
+            "Note for this date (this will appear inside the calendar day)",
+            value=existing_note,
+            height=80,
+        )
 
-            st.markdown("### 📋 Follow-Ups in This Month")
-            st.markdown('<div class="crm-card">', unsafe_allow_html=True)
-            st.dataframe(month_display, use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+        col_n1, col_n2 = st.columns(2)
+        with col_n1:
+            save_note_btn = st.form_submit_button("Save Note")
+        with col_n2:
+            delete_note_btn = st.form_submit_button("Delete Note")
+
+    if save_note_btn:
+        notes_df_save = load_calendar_notes()
+        if not notes_df_save.empty:
+            notes_df_save["date"] = pd.to_datetime(
+                notes_df_save["date"], errors="coerce"
+            ).dt.date
+            mask = notes_df_save["date"] == note_date
+        else:
+            mask = None
+
+        if notes_df_save.empty or mask is None or not mask.any():
+            new_row = {
+                "date": note_date.isoformat(),
+                "note": note_text_input.strip(),
+            }
+            notes_df_save = pd.concat(
+                [notes_df_save, pd.DataFrame([new_row])],
+                ignore_index=True,
+            )
+        else:
+            notes_df_save.loc[mask, "note"] = note_text_input.strip()
+
+        save_calendar_notes(notes_df_save)
+        st.success("Note saved for this date.")
+        st.experimental_rerun()
+
+    if delete_note_btn:
+        notes_df_del = load_calendar_notes()
+        if not notes_df_del.empty:
+            notes_df_del["date"] = pd.to_datetime(
+                notes_df_del["date"], errors="coerce"
+            ).dt.date
+            notes_df_del = notes_df_del[notes_df_del["date"] != note_date]
+            save_calendar_notes(notes_df_del)
+            st.success("Note deleted for this date.")
+            st.experimental_rerun()
+
+    # ---------- Optional: table of follow-ups for the month ----------
+    if not month_rows.empty:
+        show_cols = [
+            "next_follow_up_date",
+            "customer_name",
+            "company_name",
+            "city",
+            "service_type",
+            "status",
+            "phone",
+            "email",
+        ]
+        available_cols = [c for c in show_cols if c in month_rows.columns]
+        month_display = month_rows[available_cols].rename(
+            columns={"next_follow_up_date": "follow_up_date"}
+        ).sort_values("follow_up_date")
+
+        st.markdown("### Follow-Ups in This Month")
+        st.markdown('<div class="crm-card">', unsafe_allow_html=True)
+        st.dataframe(month_display, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
