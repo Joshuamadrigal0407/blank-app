@@ -16,8 +16,11 @@ import calendar  # for month calendar
 DATA_FILE = "sprayfoam_crm.csv"
 USERS_FILE = "users.csv"  # for login/sign-up accounts
 
-# Your logo (from ECI Foam Systems site / assets)
-LOGO_URL = "https://images.leadconnectorhq.com/image/f_webp/q_80/r_1200/u_https%3A//assets.cdn.filesafe.space/lkH7W8xbGl6pzt92LyGS/media/681428e788b94e7763044d2f.png"
+# Your logo
+LOGO_URL = (
+    "https://images.leadconnectorhq.com/image/f_webp/q_80/r_1200/"
+    "u_https%3A//assets.cdn.filesafe.space/lkH7W8xbGl6pzt92LyGS/media/681428e788b94e7763044d2f.png"
+)
 
 # Brighter, high-contrast colors (light / clean theme)
 PRIMARY_COLOR = "#2563eb"   # blue
@@ -402,12 +405,12 @@ df = load_data()
 
 # For calendar: parse next_follow_up into actual dates
 df_dates = df.copy()
-if not df_dates.empty:
+if not df_dates.empty and "next_follow_up" in df_dates.columns:
     df_dates["next_follow_up_date"] = pd.to_datetime(
         df_dates["next_follow_up"], errors="coerce"
     ).dt.date
 else:
-    # empty dataframe: just create the column with no rows
+    # empty dataframe or no column yet: create empty column
     df_dates["next_follow_up_date"] = pd.Series(dtype="object")
 
 # ============================================================
@@ -422,7 +425,7 @@ lost_records = df[df["status"] == "Lost"].shape[0] if not df.empty else 0
 
 today = date.today()
 today_followups = 0
-if not df_dates.empty:
+if not df_dates.empty and "next_follow_up_date" in df_dates.columns:
     today_followups = df_dates[
         df_dates["next_follow_up_date"] == today
     ].shape[0]
@@ -481,13 +484,13 @@ st.write("")  # spacer
 
 st.sidebar.header("🔎 Filters")
 
-status_options = ["All"] + sorted([s for s in df["status"].dropna().unique()])
+status_options = ["All"] + sorted([s for s in df["status"].dropna().unique()]) if not df.empty else ["All"]
 status_filter = st.sidebar.selectbox("Status", status_options)
 
-city_options = ["All"] + sorted([c for c in df["city"].dropna().unique()])
+city_options = ["All"] + sorted([c for c in df["city"].dropna().unique()]) if not df.empty else ["All"]
 city_filter = st.sidebar.selectbox("City", city_options)
 
-service_options = ["All"] + sorted([s for s in df["service_type"].dropna().unique()])
+service_options = ["All"] + sorted([s for s in df["service_type"].dropna().unique()]) if not df.empty else ["All"]
 service_filter = st.sidebar.selectbox("Service Type", service_options)
 
 search_text = st.sidebar.text_input("Search customer / company / address", "")
@@ -508,35 +511,36 @@ sort_by = st.sidebar.selectbox(
 # Apply filters
 filtered = df.copy()
 
-if status_filter != "All":
-    filtered = filtered[filtered["status"] == status_filter]
+if not filtered.empty:
+    if status_filter != "All":
+        filtered = filtered[filtered["status"] == status_filter]
 
-if city_filter != "All":
-    filtered = filtered[filtered["city"] == city_filter]
+    if city_filter != "All":
+        filtered = filtered[filtered["city"] == city_filter]
 
-if service_filter != "All":
-    filtered = filtered[filtered["service_type"] == service_filter]
+    if service_filter != "All":
+        filtered = filtered[filtered["service_type"] == service_filter]
 
-if search_text.strip():
-    q = search_text.strip().lower()
-    mask = (
-        filtered["customer_name"].fillna("").str.lower().str.contains(q)
-        | filtered["company_name"].fillna("").str.lower().str.contains(q)
-        | filtered["address"].fillna("").str.lower().str.contains(q)
-    )
-    filtered = filtered[mask]
+    if search_text.strip():
+        q = search_text.strip().lower()
+        mask = (
+            filtered["customer_name"].fillna("").str.lower().str.contains(q)
+            | filtered["company_name"].fillna("").str.lower().str.contains(q)
+            | filtered["address"].fillna("").str.lower().str.contains(q)
+        )
+        filtered = filtered[mask]
 
-# Sorting
-sort_map = {
-    "Customer Name": "customer_name",
-    "Company": "company_name",
-    "City": "city",
-    "Status": "status",
-    "Next Follow-Up": "next_follow_up",
-    "Estimated Value": "estimated_value",
-}
-if sort_by != "None" and sort_map.get(sort_by) in filtered.columns:
-    filtered = filtered.sort_values(by=sort_map[sort_by], na_position="last")
+    # Sorting
+    sort_map = {
+        "Customer Name": "customer_name",
+        "Company": "company_name",
+        "City": "city",
+        "Status": "status",
+        "Next Follow-Up": "next_follow_up",
+        "Estimated Value": "estimated_value",
+    }
+    if sort_by != "None" and sort_map.get(sort_by) in filtered.columns:
+        filtered = filtered.sort_values(by=sort_map[sort_by], na_position="last")
 
 # ============================================================
 # TABS (VIEW / ADD / EDIT / EMAIL / CALENDAR)
@@ -557,7 +561,7 @@ tab_view, tab_add, tab_edit, tab_email, tab_calendar = st.tabs(
 # ------------------------------------------------------------
 
 with tab_view:
-    st.subheader(f"Customers & Leads ({len(filtered)})")
+    st.subheader(f"Customers & Leads ({len(filtered) if not filtered.empty else 0})")
 
     display_cols = [
         "customer_name",
@@ -574,10 +578,10 @@ with tab_view:
         "next_follow_up",
         "lead_source",
     ]
-    existing_cols = [c for c in display_cols if c in filtered.columns]
+    existing_cols = [c for c in display_cols if c in filtered.columns] if not filtered.empty else []
 
     st.markdown('<div class="crm-card">', unsafe_allow_html=True)
-    if not filtered.empty:
+    if not filtered.empty and existing_cols:
         st.dataframe(filtered[existing_cols], use_container_width=True)
     else:
         st.write("No records match your filters yet.")
@@ -585,7 +589,7 @@ with tab_view:
 
     st.download_button(
         label="📥 Download filtered as CSV",
-        data=filtered.to_csv(index=False),
+        data=(filtered.to_csv(index=False) if not filtered.empty else ""),
         file_name="sprayfoam_crm_filtered.csv",
         mime="text/csv",
     )
@@ -613,10 +617,10 @@ with tab_view:
             status_idx = STATUS_CHOICES.index(current_status) if current_status in STATUS_CHOICES else 0
             status_q = st.selectbox("Status", STATUS_CHOICES, index=status_idx)
 
-            nf_val = row_q.get("next_follow_up", str(date.today()))
+            nf_val = row_q.get("next_follow_up", str(today))
             nf_parsed = pd.to_datetime(nf_val, errors="coerce")
             if pd.isna(nf_parsed):
-                nf_parsed = pd.Timestamp(date.today())
+                nf_parsed = pd.Timestamp(today)
             nf_q = st.date_input("Next Follow-Up Date", value=nf_parsed.date(), key="quick_date")
 
             if st.button("💾 Save Quick Update"):
@@ -681,7 +685,7 @@ with tab_add:
             )
             next_follow_up = st.date_input(
                 "Next Follow-Up Date",
-                value=date.today(),
+                value=today,
             )
 
         notes = st.text_area("Notes (scope, conditions, objections, etc.)")
@@ -778,7 +782,11 @@ with tab_edit:
                 )
                 building_choices = [""] + BUILDING_TYPES
                 building_current = selected_row.get("building_type", "")
-                building_idx = building_choices.index(building_current) if building_current in building_choices else 0
+                building_idx = (
+                    building_choices.index(building_current)
+                    if building_current in building_choices
+                    else 0
+                )
                 building_type_e = st.selectbox(
                     "Building Type",
                     building_choices,
@@ -786,7 +794,11 @@ with tab_edit:
                 )
                 service_choices = [""] + SERVICE_TYPES
                 service_current = selected_row.get("service_type", "")
-                service_idx = service_choices.index(service_current) if service_current in service_choices else 0
+                service_idx = (
+                    service_choices.index(service_current)
+                    if service_current in service_choices
+                    else 0
+                )
                 service_type_e = st.selectbox(
                     "Service Type",
                     service_choices,
@@ -796,7 +808,11 @@ with tab_edit:
             with c4:
                 roof_choices = [""] + ROOF_TYPES
                 roof_current = selected_row.get("roof_type", "")
-                roof_idx = roof_choices.index(roof_current) if roof_current in roof_choices else 0
+                roof_idx = (
+                    roof_choices.index(roof_current)
+                    if roof_current in roof_choices
+                    else 0
+                )
                 roof_type_e = st.selectbox(
                     "Roof Type",
                     roof_choices,
@@ -810,7 +826,11 @@ with tab_edit:
                     value=str(selected_row.get("estimated_value", "")),
                 )
                 status_current = selected_row.get("status", "New Lead")
-                status_idx = STATUS_CHOICES.index(status_current) if status_current in STATUS_CHOICES else 0
+                status_idx = (
+                    STATUS_CHOICES.index(status_current)
+                    if status_current in STATUS_CHOICES
+                    else 0
+                )
                 status_e = st.selectbox(
                     "Status",
                     STATUS_CHOICES,
@@ -819,7 +839,7 @@ with tab_edit:
                 next_follow_up_e = st.date_input(
                     "Next Follow-Up Date",
                     value=pd.to_datetime(
-                        selected_row.get("next_follow_up", date.today())
+                        selected_row.get("next_follow_up", today)
                     ).date(),
                 )
 
@@ -875,7 +895,8 @@ with tab_email:
         "Use your **Yahoo email + app password** to email customers directly from the CRM."
     )
     st.markdown(
-        "*Tip: In Yahoo account security, create an **app password** for SMTP and use it here (not your main password).*"
+        "*Tip: In Yahoo account security, create an **app password** for SMTP "
+        "and use it here (not your main password).*"
     )
 
     col_left, col_right = st.columns(2)
@@ -947,6 +968,7 @@ with tab_email:
 with tab_calendar:
     st.subheader("Calendar & Reminders")
 
+    # No followup dates at all
     if df_dates.empty or df_dates["next_follow_up_date"].isna().all():
         st.info("No follow-up dates found yet. Add customers with a 'Next Follow-Up' date first.")
     else:
@@ -968,70 +990,49 @@ with tab_calendar:
         )
 
         cal = calendar.Calendar(firstweekday=6)  # 6 = Sunday start
-
         month_name = calendar.month_name[month]
-        cal_html = f"""
-        <div class="crm-card" style="margin-bottom: 1rem;">
-            <h4 style="margin-top:0; margin-bottom:0.5rem;">{month_name} {year}</h4>
-            <table style="width:100%; border-collapse:collapse; text-align:center; font-size:0.9rem;">
-                <thead>
-                    <tr>
-        """
+
+        # Build calendar HTML safely (no broken f-strings)
+        cal_html_parts = []
+        cal_html_parts.append(
+            f"""
+            <div class="crm-card" style="margin-bottom: 1rem;">
+                <h4 style="margin-top:0; margin-bottom:0.5rem;">{month_name} {year}</h4>
+                <table style="width:100%; border-collapse:collapse; text-align:center; font-size:0.9rem;">
+                    <thead>
+                        <tr>
+            """
+        )
 
         # Weekday headers
         for wd in ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]:
-            cal_html += f"""
-                <th style="padding:0.35rem; border-bottom:1px solid {BORDER_COLOR}; color:{MUTED_TEXT};">
-                    {wd}
-                </th>
-            """
-        cal_html += "</tr></thead><tbody>"
+            cal_html_parts.append(
+                f'<th style="padding:0.35rem; border-bottom:1px solid {BORDER_COLOR}; color:{MUTED_TEXT};">{wd}</th>'
+            )
 
-        # Weeks
+        cal_html_parts.append("</tr></thead><tbody>")
+
+        # Weeks & days
         for week in cal.monthdayscalendar(year, month):
-            cal_html += "<tr>"
+            cal_html_parts.append("<tr>")
             for day in week:
                 if day == 0:
-                    cal_html += '<td style="padding:0.4rem; height:2rem;"></td>'
+                    cal_html_parts.append('<td style="padding:0.4rem; height:2rem;"></td>')
                 else:
                     if day in days_with_followups:
-                        cal_html += f"""
-                        <td style="
-                            padding:0.4rem;
-                            height:2rem;
-                            background-color: rgba(37,99,235,0.09);
-                            border-radius:0.35rem;
-                            border:1px solid {PRIMARY_COLOR};
-                            font-weight:600;
-                            color:{TEXT_COLOR};
-                        ">
-                            {day}
-                        </td>
-                        """
+                        cal_html_parts.append(
+                            f'<td style="padding:0.4rem; height:2rem; background-color: rgba(37,99,235,0.09); '
+                            f'border-radius:0.35rem; border:1px solid {PRIMARY_COLOR}; font-weight:600; '
+                            f'color:{TEXT_COLOR};">{day}</td>'
+                        )
                     else:
-                       cal_html += f"""
-                        <td style="
-                            padding:0.4rem;
-                            height:2rem;
-                            background-color: rgba(37,99,235,0.09);
-                            border-radius:0.35rem;
-                            border:1px solid {PRIMARY_COLOR};
-                            font-weight:600;
-                            color:{TEXT_COLOR};
-                        ">
-                            {day}
-                        </td>
-"""
-                        <td style="
-                            padding:0.4rem;
-                            height:2rem;
-                            color:{TEXT_COLOR};
-                        ">
-                            {day}
-                        </td>
-            cal_html += "</tr>"
-        cal_html += "</tbody></table></div>"
+                        cal_html_parts.append(
+                            f'<td style="padding:0.4rem; height:2rem; color:{TEXT_COLOR};">{day}</td>'
+                        )
+            cal_html_parts.append("</tr>")
 
+        cal_html_parts.append("</tbody></table></div>")
+        cal_html = "".join(cal_html_parts)
         st.markdown(cal_html, unsafe_allow_html=True)
 
         # Show follow-ups for the selected date
