@@ -1187,17 +1187,17 @@ with tab_calendar:
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---------- CONTEXTUAL EDITOR: SHOW ONLY WHEN A DAY IS CLICKED ----------
+    # ---------- CONTEXTUAL EDITOR: ONLY SHOW AFTER A DAY IS CLICKED ----------
     selected_day_str = st.session_state.get("selected_calendar_day")
     if selected_day_str:
         selected_day = date.fromisoformat(selected_day_str)
 
         st.markdown("---")
         st.markdown(
-            f"### Selected Date: {selected_day.strftime('%A, %B %d, %Y')}"
+            f"### {selected_day.strftime('%A, %B %d, %Y')}"
         )
 
-        # Load latest notes again for accuracy
+        # Load latest notes again
         notes_df_current = load_calendar_notes()
         if not notes_df_current.empty:
             notes_df_current["date"] = pd.to_datetime(
@@ -1308,4 +1308,3 @@ with tab_calendar:
         st.markdown('<div class="crm-card">', unsafe_allow_html=True)
         st.dataframe(month_display, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
-
