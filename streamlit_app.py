@@ -430,7 +430,6 @@ if not df_dates.empty and "next_follow_up" in df_dates.columns:
         df_dates["next_follow_up"], errors="coerce"
     ).dt.date
 else:
-    # empty dataframe or no column yet: create empty column
     df_dates["next_follow_up_date"] = pd.Series(dtype="object")
 
 # ============================================================
@@ -730,7 +729,7 @@ with tab_add:
                 "building_type": building_type.strip(),
                 "service_type": service_type.strip(),
                 "roof_type": roof_type.strip(),
-                "square_feet": square_feets.strip() if (square_feets := square_feet) else "",
+                "square_feet": square_feet.strip(),
                 "estimated_value": estimated_value.strip(),
                 "status": status.strip(),
                 "next_follow_up": str(next_follow_up),
@@ -982,7 +981,7 @@ with tab_email:
                 st.error(f"Failed to send email: {e}")
 
 # ------------------------------------------------------------
-# TAB 5: CALENDAR & REMINDERS – MONTH VIEW WITH NOTES (GOOGLE-LIKE)
+# TAB 5: CALENDAR & REMINDERS – CLICKABLE MONTH VIEW WITH NOTES
 # ------------------------------------------------------------
 
 with tab_calendar:
@@ -992,10 +991,13 @@ with tab_calendar:
     if "cal_current_date" not in st.session_state:
         st.session_state["cal_current_date"] = date.today().replace(day=1)
 
+    # Ensure we have a selected day (for editor)
+    if "selected_calendar_day" not in st.session_state:
+        st.session_state["selected_calendar_day"] = None
+
     # Navigation bar: Previous, Today, Next + Month/Year title
     nav_col_left, nav_col_center, nav_col_right = st.columns([2, 3, 2])
 
-    # Local variable for current month before buttons
     current_month_date = st.session_state["cal_current_date"]
     cur_year = current_month_date.year
     cur_month = current_month_date.month
@@ -1004,7 +1006,6 @@ with tab_calendar:
         n1, n2, n3 = st.columns([1, 1.5, 1])
         with n1:
             if st.button("◀", key="cal_prev"):
-                # Go to previous month
                 if cur_month == 1:
                     new_year = cur_year - 1
                     new_month = 12
@@ -1012,13 +1013,14 @@ with tab_calendar:
                     new_year = cur_year
                     new_month = cur_month - 1
                 st.session_state["cal_current_date"] = date(new_year, new_month, 1)
+                st.session_state["selected_calendar_day"] = None
         with n2:
             if st.button("Today", key="cal_today"):
                 today_local = date.today()
                 st.session_state["cal_current_date"] = today_local.replace(day=1)
+                st.session_state["selected_calendar_day"] = None
         with n3:
             if st.button("▶", key="cal_next"):
-                # Go to next month
                 if cur_month == 12:
                     new_year = cur_year + 1
                     new_month = 1
@@ -1026,8 +1028,9 @@ with tab_calendar:
                     new_year = cur_year
                     new_month = cur_month + 1
                 st.session_state["cal_current_date"] = date(new_year, new_month, 1)
+                st.session_state["selected_calendar_day"] = None
 
-    # Re-read state after button clicks
+    # Re-read state after navigation
     current_month_date = st.session_state["cal_current_date"]
     year = current_month_date.year
     month = current_month_date.month
@@ -1053,7 +1056,7 @@ with tab_calendar:
         )
 
     with nav_col_right:
-        st.write("")  # spacer (placeholder for future filters if you want)
+        st.write("")
 
     st.markdown(
         f"Viewing **{month_name} {year}** "
@@ -1082,145 +1085,119 @@ with tab_calendar:
     else:
         notes_month = pd.DataFrame(columns=["date", "note"])
 
-    # ----------------- MONTH GRID (GOOGLE-LIKE) -----------------
-    cal = calendar.Calendar(firstweekday=6)  # 6 = Sunday start
+    # ----------------- WEEKDAY HEADER -----------------
+    st.markdown('<div class="crm-card" style="padding:0.75rem;">', unsafe_allow_html=True)
+    header_cols = st.columns(7)
+    for i, wd in enumerate(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]):
+        with header_cols[i]:
+            st.markdown(
+                f"<div style='text-align:right; font-size:0.8rem; font-weight:600; color:{MUTED_TEXT}; "
+                f"padding-right:0.25rem;'>{wd}</div>",
+                unsafe_allow_html=True,
+            )
 
-    cal_html_parts = []
-    cal_html_parts.append(
-        f"""
-        <div class="crm-card" style="margin-top:0.75rem; margin-bottom: 1rem;">
-            <table style="width:100%; border-collapse:collapse; font-size:0.8rem;">
-                <thead>
-                    <tr>
-        """
-    )
+    # ----------------- MONTH GRID WITH CLICKABLE DAYS -----------------
+    cal = calendar.Calendar(firstweekday=6)  # Sunday start
+    today_local = date.today()
 
-    # Weekday headers like Google Calendar
-    for wd in ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]:
-        cal_html_parts.append(
-            f'<th style="padding:0.5rem 0.25rem; border-bottom:1px solid {BORDER_COLOR}; '
-            f'color:{MUTED_TEXT}; font-weight:600; text-align:right; padding-right:0.5rem;">{wd}</th>'
+    for week in cal.monthdayscalendar(year, month):
+        row_cols = st.columns(7)
+        for idx, day_num in enumerate(week):
+            with row_cols[idx]:
+                if day_num == 0:
+                    # Empty cell (outside current month)
+                    st.markdown(
+                        f"<div style='border:1px solid {BORDER_COLOR}; height:90px; "
+                        f"background-color:#f9fafb;'>&nbsp;</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    day_date = date(year, month, day_num)
+
+                    # Follow-ups on this date
+                    if not month_rows.empty and "next_follow_up_date" in month_rows.columns:
+                        day_rows = month_rows[
+                            month_rows["next_follow_up_date"] == day_date
+                        ]
+                    else:
+                        day_rows = pd.DataFrame(columns=month_rows.columns)
+
+                    # Note for this date
+                    note_text = ""
+                    if not notes_month.empty:
+                        match_note = notes_month[notes_month["date"] == day_date]
+                        if not match_note.empty:
+                            note_text = str(match_note.iloc[0]["note"]).strip()
+
+                    has_events = not day_rows.empty
+                    has_note = bool(note_text)
+                    is_today = (day_date == today_local)
+
+                    # Build button label (multi-line)
+                    label_lines = [str(day_num)]
+                    if has_events:
+                        for _, r in day_rows.head(2).iterrows():
+                            name = (r.get("customer_name") or r.get("company_name") or "Job").strip()
+                            service = (r.get("service_type") or "").strip()
+                            if len(name) > 20:
+                                name = name[:19] + "…"
+                            if service:
+                                if len(service) > 12:
+                                    service = service[:11] + "…"
+                                label_lines.append(f"{name} • {service}")
+                            else:
+                                label_lines.append(name)
+                        extra = len(day_rows) - 2
+                        if extra > 0:
+                            label_lines.append(f"+{extra} more")
+
+                    if has_note:
+                        # Short preview of note
+                        preview = note_text.replace("\n", " ")
+                        if len(preview) > 22:
+                            preview = preview[:21] + "…"
+                        label_lines.append(f"Note: {preview}")
+
+                    button_label = "\n".join(label_lines)
+
+                    # Background style hints via HTML wrapper
+                    bg_color = "#ffffff"
+                    if idx in (0, 6):  # weekend
+                        bg_color = "#fafafa"
+                    if has_events or has_note:
+                        bg_color = "rgba(37,99,235,0.04)"
+                    border_style = f"1px solid {BORDER_COLOR}"
+                    if is_today:
+                        border_style = f"2px solid {ACCENT_COLOR}"
+
+                    st.markdown(
+                        f"<div style='border:{border_style}; background-color:{bg_color}; "
+                        f"padding:2px 2px 0px 2px; border-radius:4px;'>",
+                        unsafe_allow_html=True,
+                    )
+                    clicked = st.button(
+                        button_label,
+                        key=f"day_{year}_{month}_{day_num}",
+                        help="Click to add or edit a note / reminder for this date.",
+                    )
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+                    if clicked:
+                        st.session_state["selected_calendar_day"] = day_date.isoformat()
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ---------- CONTEXTUAL EDITOR: SHOW ONLY WHEN A DAY IS CLICKED ----------
+    selected_day_str = st.session_state.get("selected_calendar_day")
+    if selected_day_str:
+        selected_day = date.fromisoformat(selected_day_str)
+
+        st.markdown("---")
+        st.markdown(
+            f"### Selected Date: {selected_day.strftime('%A, %B %d, %Y')}"
         )
 
-    cal_html_parts.append("</tr></thead><tbody>")
-
-    # Weeks & days
-    today_local = date.today()
-    for week in cal.monthdayscalendar(year, month):
-        cal_html_parts.append("<tr>")
-        for idx, day_num in enumerate(week):
-            if day_num == 0:
-                # Empty cell (days outside this month)
-                cal_html_parts.append(
-                    '<td style="padding:0; height:110px; '
-                    f'border:1px solid {BORDER_COLOR}; background-color:#f9fafb;"></td>'
-                )
-            else:
-                day_date = date(year, month, day_num)
-
-                # All follow-ups for this exact date
-                if not month_rows.empty and "next_follow_up_date" in month_rows.columns:
-                    day_rows = month_rows[
-                        month_rows["next_follow_up_date"] == day_date
-                    ]
-                else:
-                    day_rows = pd.DataFrame(columns=month_rows.columns)
-
-                # Any custom calendar note for this date
-                note_text = ""
-                if not notes_month.empty:
-                    match_note = notes_month[notes_month["date"] == day_date]
-                    if not match_note.empty:
-                        note_text = str(match_note.iloc[0]["note"]).strip()
-
-                has_events = not day_rows.empty
-                has_note = bool(note_text)
-                is_today = (day_date == today_local)
-
-                # Weekend styling (Sat/Sun) like Google light grey
-                is_weekend = (idx == 0 or idx == 6)  # Sun or Sat column
-
-                # Base cell style
-                bg_color = "#ffffff"
-                if is_weekend:
-                    bg_color = "#fafafa"
-                if has_events or has_note:
-                    bg_color = "rgba(37,99,235,0.04)"
-
-                cell_style = (
-                    f"padding:2px 4px; height:110px; vertical-align:top; "
-                    f"border:1px solid {BORDER_COLOR}; text-align:left; "
-                    f"background-color:{bg_color};"
-                )
-                if is_today:
-                    cell_style += f" box-shadow:0 0 0 2px {ACCENT_COLOR} inset;"
-
-                # Inner HTML: Day number at top-right + events + note
-                cell_inner_parts = []
-                cell_inner_parts.append(
-                    f'<div style="font-weight:600; font-size:0.8rem; '
-                    f'text-align:right; margin-bottom:4px; color:{TEXT_COLOR};">'
-                    f'{day_num}</div>'
-                )
-
-                # Show up to 3 follow-ups
-                if has_events:
-                    for _, r in day_rows.head(3).iterrows():
-                        name = (r.get("customer_name") or r.get("company_name") or "Job")
-                        name = name.strip()
-                        if len(name) > 24:
-                            name = name[:23] + "…"
-
-                        service = (r.get("service_type") or "").strip()
-                        service_txt = f" – {service}" if service else ""
-
-                        cell_inner_parts.append(
-                            '<div style="font-size:0.72rem; padding:2px 4px; '
-                            'margin-bottom:2px; border-radius:4px; '
-                            f'background-color:rgba(37,99,235,0.12); color:{TEXT_COLOR}; '
-                            'overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">'
-                            f'{name}{service_txt}'
-                            '</div>'
-                        )
-
-                    extra = len(day_rows) - 3
-                    if extra > 0:
-                        cell_inner_parts.append(
-                            '<div style="font-size:0.7rem; color:#4b5563; margin-left:4px;">'
-                            f'+{extra} more'
-                            '</div>'
-                        )
-
-                # Custom note (multi-line, wraps)
-                if has_note:
-                    cell_inner_parts.append(
-                        '<div style="font-size:0.7rem; margin-top:4px; '
-                        'color:#374151; white-space:normal; line-height:1.2; '
-                        'padding:2px 4px; border-radius:4px; '
-                        'background-color:#fef3c7;">'
-                        f'{note_text}'
-                        '</div>'
-                    )
-
-                cell_inner_html = "".join(cell_inner_parts)
-                cal_html_parts.append(
-                    f'<td style="{cell_style}">{cell_inner_html}</td>'
-                )
-
-        cal_html_parts.append("</tr>")
-
-    cal_html_parts.append("</tbody></table></div>")
-    cal_html = "".join(cal_html_parts)
-
-    st.markdown(cal_html, unsafe_allow_html=True)
-
-    # ---------- NOTE EDITOR (below calendar) ----------
-    st.markdown("### Add or Edit Calendar Note")
-
-    with st.form("calendar_note_form"):
-        note_date = st.date_input("Date", value=today_local, key="note_date")
-
-        # Load latest notes again (in case something changed)
+        # Load latest notes again for accuracy
         notes_df_current = load_calendar_notes()
         if not notes_df_current.empty:
             notes_df_current["date"] = pd.to_datetime(
@@ -1229,61 +1206,89 @@ with tab_calendar:
 
         existing_note = ""
         if not notes_df_current.empty:
-            match = notes_df_current[notes_df_current["date"] == note_date]
+            match = notes_df_current[notes_df_current["date"] == selected_day]
             if not match.empty:
                 existing_note = str(match.iloc[0]["note"])
 
-        note_text_input = st.text_area(
-            "Note for this date (this will appear inside the calendar day)",
-            value=existing_note,
-            height=80,
-        )
+        col_edit_left, col_edit_right = st.columns([2, 3])
 
-        col_n1, col_n2 = st.columns(2)
-        with col_n1:
-            save_note_btn = st.form_submit_button("Save Note")
-        with col_n2:
-            delete_note_btn = st.form_submit_button("Delete Note")
+        with col_edit_left:
+            with st.form("selected_day_note_form"):
+                note_text_input = st.text_area(
+                    "Note / Reminder for this date",
+                    value=existing_note,
+                    height=120,
+                )
 
-    if save_note_btn:
-        notes_df_save = load_calendar_notes()
-        if not notes_df_save.empty:
-            notes_df_save["date"] = pd.to_datetime(
-                notes_df_save["date"], errors="coerce"
-            ).dt.date
-            mask = notes_df_save["date"] == note_date
-        else:
-            mask = None
+                save_note_btn = st.form_submit_button("Save Note")
+                delete_note_btn = st.form_submit_button("Delete Note")
 
-        if notes_df_save.empty or mask is None or not mask.any():
-            new_row = {
-                "date": note_date.isoformat(),
-                "note": note_text_input.strip(),
-            }
-            notes_df_save = pd.concat(
-                [notes_df_save, pd.DataFrame([new_row])],
-                ignore_index=True,
-            )
-        else:
-            notes_df_save.loc[mask, "note"] = note_text_input.strip()
+            if save_note_btn:
+                notes_df_save = load_calendar_notes()
+                if not notes_df_save.empty:
+                    notes_df_save["date"] = pd.to_datetime(
+                        notes_df_save["date"], errors="coerce"
+                    ).dt.date
+                    mask = notes_df_save["date"] == selected_day
+                else:
+                    mask = None
 
-        save_calendar_notes(notes_df_save)
-        st.success("Note saved for this date.")
-        st.experimental_rerun()
+                if notes_df_save.empty or mask is None or not mask.any():
+                    new_row = {
+                        "date": selected_day.isoformat(),
+                        "note": note_text_input.strip(),
+                    }
+                    notes_df_save = pd.concat(
+                        [notes_df_save, pd.DataFrame([new_row])],
+                        ignore_index=True,
+                    )
+                else:
+                    notes_df_save.loc[mask, "note"] = note_text_input.strip()
 
-    if delete_note_btn:
-        notes_df_del = load_calendar_notes()
-        if not notes_df_del.empty:
-            notes_df_del["date"] = pd.to_datetime(
-                notes_df_del["date"], errors="coerce"
-            ).dt.date
-            notes_df_del = notes_df_del[notes_df_del["date"] != note_date]
-            save_calendar_notes(notes_df_del)
-            st.success("Note deleted for this date.")
-            st.experimental_rerun()
+                save_calendar_notes(notes_df_save)
+                st.success("Note saved for this date.")
+                st.experimental_rerun()
+
+            if delete_note_btn:
+                notes_df_del = load_calendar_notes()
+                if not notes_df_del.empty:
+                    notes_df_del["date"] = pd.to_datetime(
+                        notes_df_del["date"], errors="coerce"
+                    ).dt.date
+                    notes_df_del = notes_df_del[notes_df_del["date"] != selected_day]
+                    save_calendar_notes(notes_df_del)
+                    st.success("Note deleted for this date.")
+                    st.experimental_rerun()
+
+        with col_edit_right:
+            # Show follow-ups for just this day
+            if not df_dates.empty and "next_follow_up_date" in df_dates.columns:
+                day_followups = df_dates[
+                    df_dates["next_follow_up_date"] == selected_day
+                ].copy()
+            else:
+                day_followups = pd.DataFrame(columns=df_dates.columns)
+
+            st.markdown("#### Follow-Ups on This Date")
+            if day_followups.empty:
+                st.write("No follow-ups scheduled for this date.")
+            else:
+                show_cols = [
+                    "customer_name",
+                    "company_name",
+                    "city",
+                    "service_type",
+                    "status",
+                    "phone",
+                    "email",
+                    "address",
+                ]
+                available_cols = [c for c in show_cols if c in day_followups.columns]
+                st.dataframe(day_followups[available_cols], use_container_width=True)
 
     # ---------- Optional: table of follow-ups for the month ----------
     if not month_rows.empty:
+        st.markdown("---")
         show_cols = [
             "next_follow_up_date",
             "customer_name",
