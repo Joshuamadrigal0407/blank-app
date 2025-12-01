@@ -15,7 +15,7 @@ import calendar  # used for month view calendar
 
 DATA_FILE = "sprayfoam_crm.csv"
 USERS_FILE = "users.csv"           # for login/sign-up accounts
-CAL_NOTES_FILE = "calendar_notes.csv"  # for free-form calendar notes
+CAL_NOTES_FILE = "calendar_notes.csv"  # for calendar notes + reminders
 
 # Your logo
 LOGO_URL = (
@@ -153,17 +153,29 @@ def new_id():
 
 
 # ============================================================
-# CALENDAR NOTES HELPERS
+# CALENDAR NOTES HELPERS (WITH REMINDER FIELDS)
 # ============================================================
 
 def load_calendar_notes() -> pd.DataFrame:
-    """Load calendar notes from CSV (one row per date)."""
+    """
+    Load calendar notes from CSV (one row per date), including:
+    - note
+    - reminder_phone
+    - reminder_offset ("None", "1 day before", "3 hours before")
+    """
+    base_cols = ["date", "note", "reminder_phone", "reminder_offset"]
+
     if not os.path.exists(CAL_NOTES_FILE):
-        return pd.DataFrame(columns=["date", "note"])
+        return pd.DataFrame(columns=base_cols)
+
     df = pd.read_csv(CAL_NOTES_FILE)
-    if "date" not in df.columns or "note" not in df.columns:
-        df = pd.DataFrame(columns=["date", "note"])
-    return df
+
+    # Ensure all required columns exist
+    for col in base_cols:
+        if col not in df.columns:
+            df[col] = ""
+
+    return df[base_cols]
 
 
 def save_calendar_notes(df: pd.DataFrame):
@@ -981,7 +993,7 @@ with tab_email:
                 st.error(f"Failed to send email: {e}")
 
 # ------------------------------------------------------------
-# TAB 5: CALENDAR & REMINDERS – CLICKABLE MONTH VIEW WITH NOTES
+# TAB 5: CALENDAR & REMINDERS – CLICKABLE MONTH VIEW WITH NOTES + REMINDER SETTINGS
 # ------------------------------------------------------------
 
 with tab_calendar:
@@ -1063,7 +1075,7 @@ with tab_calendar:
         f"({month_start.strftime('%b %d')} – {month_end.strftime('%b %d')})."
     )
 
-    # Load calendar notes and parse dates
+    # Load calendar notes (with reminder fields) and parse dates
     notes_df = load_calendar_notes()
     if not notes_df.empty:
         notes_df["date"] = pd.to_datetime(notes_df["date"], errors="coerce").dt.date
@@ -1083,7 +1095,7 @@ with tab_calendar:
             (notes_df["date"] >= month_start) & (notes_df["date"] <= month_end)
         ].copy()
     else:
-        notes_month = pd.DataFrame(columns=["date", "note"])
+        notes_month = pd.DataFrame(columns=["date", "note", "reminder_phone", "reminder_offset"])
 
     # ----------------- WEEKDAY HEADER -----------------
     st.markdown('<div class="crm-card" style="padding:0.75rem;">', unsafe_allow_html=True)
@@ -1122,15 +1134,21 @@ with tab_calendar:
                     else:
                         day_rows = pd.DataFrame(columns=month_rows.columns)
 
-                    # Note for this date
+                    # Note + reminder info for this date
                     note_text = ""
+                    reminder_phone = ""
+                    reminder_offset = ""
+
                     if not notes_month.empty:
                         match_note = notes_month[notes_month["date"] == day_date]
                         if not match_note.empty:
-                            note_text = str(match_note.iloc[0]["note"]).strip()
+                            note_text = str(match_note.iloc[0].get("note", "")).strip()
+                            reminder_phone = str(match_note.iloc[0].get("reminder_phone", "")).strip()
+                            reminder_offset = str(match_note.iloc[0].get("reminder_offset", "")).strip()
 
                     has_events = not day_rows.empty
                     has_note = bool(note_text)
+                    has_reminder = bool(reminder_phone and reminder_offset and reminder_offset != "None")
                     is_today = (day_date == today_local)
 
                     # Build button label (multi-line)
@@ -1152,11 +1170,19 @@ with tab_calendar:
                             label_lines.append(f"+{extra} more")
 
                     if has_note:
-                        # Short preview of note
                         preview = note_text.replace("\n", " ")
                         if len(preview) > 22:
                             preview = preview[:21] + "…"
                         label_lines.append(f"Note: {preview}")
+
+                    if has_reminder:
+                        # Short code for reminder indicator
+                        short = "⏰"
+                        if "1 day" in reminder_offset:
+                            short = "⏰ 1d"
+                        elif "3 hour" in reminder_offset:
+                            short = "⏰ 3h"
+                        label_lines.append(short)
 
                     button_label = "\n".join(label_lines)
 
@@ -1164,7 +1190,7 @@ with tab_calendar:
                     bg_color = "#ffffff"
                     if idx in (0, 6):  # weekend
                         bg_color = "#fafafa"
-                    if has_events or has_note:
+                    if has_events or has_note or has_reminder:
                         bg_color = "rgba(37,99,235,0.04)"
                     border_style = f"1px solid {BORDER_COLOR}"
                     if is_today:
@@ -1205,10 +1231,15 @@ with tab_calendar:
             ).dt.date
 
         existing_note = ""
+        existing_phone = ""
+        existing_offset = "None"
+
         if not notes_df_current.empty:
             match = notes_df_current[notes_df_current["date"] == selected_day]
             if not match.empty:
-                existing_note = str(match.iloc[0]["note"])
+                existing_note = str(match.iloc[0].get("note", "") or "")
+                existing_phone = str(match.iloc[0].get("reminder_phone", "") or "")
+                existing_offset = str(match.iloc[0].get("reminder_offset", "") or "None")
 
         col_edit_left, col_edit_right = st.columns([2, 3])
 
@@ -1220,8 +1251,26 @@ with tab_calendar:
                     height=120,
                 )
 
-                save_note_btn = st.form_submit_button("Save Note")
-                delete_note_btn = st.form_submit_button("Delete Note")
+                reminder_phone_input = st.text_input(
+                    "Phone number for SMS reminder (optional)",
+                    value=existing_phone,
+                    placeholder="e.g. +14085551234",
+                )
+
+                offset_options = ["None", "1 day before", "3 hours before"]
+                try:
+                    offset_index = offset_options.index(existing_offset)
+                except ValueError:
+                    offset_index = 0
+
+                reminder_offset_input = st.selectbox(
+                    "Reminder time (stored for SMS integration)",
+                    offset_options,
+                    index=offset_index,
+                )
+
+                save_note_btn = st.form_submit_button("Save")
+                delete_note_btn = st.form_submit_button("Delete")
 
             if save_note_btn:
                 notes_df_save = load_calendar_notes()
@@ -1237,6 +1286,8 @@ with tab_calendar:
                     new_row = {
                         "date": selected_day.isoformat(),
                         "note": note_text_input.strip(),
+                        "reminder_phone": reminder_phone_input.strip(),
+                        "reminder_offset": reminder_offset_input,
                     }
                     notes_df_save = pd.concat(
                         [notes_df_save, pd.DataFrame([new_row])],
@@ -1244,9 +1295,11 @@ with tab_calendar:
                     )
                 else:
                     notes_df_save.loc[mask, "note"] = note_text_input.strip()
+                    notes_df_save.loc[mask, "reminder_phone"] = reminder_phone_input.strip()
+                    notes_df_save.loc[mask, "reminder_offset"] = reminder_offset_input
 
                 save_calendar_notes(notes_df_save)
-                st.success("Note saved for this date.")
+                st.success("Note and reminder settings saved for this date.")
                 st.experimental_rerun()
 
             if delete_note_btn:
@@ -1257,7 +1310,7 @@ with tab_calendar:
                     ).dt.date
                     notes_df_del = notes_df_del[notes_df_del["date"] != selected_day]
                     save_calendar_notes(notes_df_del)
-                    st.success("Note deleted for this date.")
+                    st.success("Note and reminder deleted for this date.")
                     st.experimental_rerun()
 
         with col_edit_right:
@@ -1286,7 +1339,7 @@ with tab_calendar:
                 available_cols = [c for c in show_cols if c in day_followups.columns]
                 st.dataframe(day_followups[available_cols], use_container_width=True)
 
-    # ---------- Optional: table of follow-ups for the month ----------
+    # ---------- Table of follow-ups for the month ----------
     if not month_rows.empty:
         st.markdown("---")
         show_cols = [
@@ -1308,3 +1361,53 @@ with tab_calendar:
         st.markdown('<div class="crm-card">', unsafe_allow_html=True)
         st.dataframe(month_display, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
+
+    # ---------- Upcoming SMS Reminders (next 30 days) ----------
+    st.markdown("---")
+    st.markdown("### Upcoming SMS Reminders (next 30 days)")
+
+    reminders_df = load_calendar_notes()
+    if reminders_df.empty:
+        st.write("No reminders configured yet.")
+    else:
+        reminders_df["date"] = pd.to_datetime(reminders_df["date"], errors="coerce")
+        reminders_df = reminders_df.dropna(subset=["date"])
+        reminders_df["date"] = reminders_df["date"].dt.date
+
+        upcoming = reminders_df[
+            (reminders_df["reminder_phone"].astype(str).str.strip() != "")
+            & (reminders_df["reminder_offset"].astype(str).str.strip() != "")
+            & (reminders_df["reminder_offset"] != "None")
+            & (reminders_df["date"] >= today)
+            & (reminders_df["date"] <= today + timedelta(days=30))
+        ].copy()
+
+        if upcoming.empty:
+            st.write("No upcoming SMS reminders in the next 30 days.")
+        else:
+            def compute_reminder_label(row):
+                event_date = row["date"]
+                offset = row["reminder_offset"]
+                if offset == "1 day before":
+                    reminder_date = event_date - timedelta(days=1)
+                    return f"{reminder_date.strftime('%b %d, %Y')} (1 day before)"
+                elif offset == "3 hours before":
+                    return f"{event_date.strftime('%b %d, %Y')} (3 hours before – time TBD)"
+                else:
+                    return ""
+
+            upcoming["reminder_when"] = upcoming.apply(compute_reminder_label, axis=1)
+
+            display_cols = ["date", "reminder_when", "reminder_phone", "note"]
+            upcoming_display = upcoming[display_cols].sort_values("date")
+
+            st.markdown('<div class="crm-card">', unsafe_allow_html=True)
+            st.dataframe(upcoming_display, use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            st.download_button(
+                "Download upcoming reminders CSV",
+                data=upcoming_display.to_csv(index=False),
+                file_name="upcoming_sms_reminders.csv",
+                mime="text/csv",
+            )
